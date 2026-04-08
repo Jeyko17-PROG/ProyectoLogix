@@ -5,24 +5,28 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="csrf-token" content="{{ csrf_token() }}">
 
-        <title>{{ config('app.name', 'Laravel') }}</title>
+        <title>Spikia | Acceso</title>
 
         <!-- Fonts -->
         <link rel="preconnect" href="https://fonts.bunny.net">
-        <link href="https://fonts.bunny.net/css?family=figtree:400,500,600&display=swap" rel="stylesheet" />
+        <link href="https://fonts.bunny.net/cssAfamily=figtree:400,500,600&display=swap" rel="stylesheet" />
 
         <!-- Scripts -->
         @vite(['resources/css/app.css', 'resources/js/app.js'])
     </head>
-    <body class="font-sans text-gray-900 antialiased">
-        <div class="min-h-screen flex flex-col sm:justify-center items-center pt-6 sm:pt-0 bg-gray-100">
-            <div>
-                <a href="/">
-                    <x-application-logo class="w-20 h-20 fill-current text-gray-500" />
-                </a>
-            </div>
+    <body class="min-h-screen flex items-center justify-center bg-gradient-to-br from-black via-zinc-900 to-black text-white">
+        <div class="relative w-full max-w-sm p-[2px] rounded-2xl bg-gradient-to-r from-[#4ffcff] via-[#7C3AED] to-[#ff2fa0] shadow-[0_0_40px_rgba(124,58,237,0.45)]">
+            <div class="bg-zinc-900/95 rounded-2xl px-7 py-7 backdrop-blur-xl">
+                <div class="flex flex-col items-center mb-6">
+                    <a href="/" class="block">
+                        <img src="{{ asset('storage/media/images/spikia-25.png') }}" alt="Spikia" class="h-24 mb-2 drop-shadow-[0_0_30px_rgba(124,58,237,0.6)]">
+                    </a>
+                    <h2 class="text-sm text-zinc-400">Acceso a tu cuenta</h2>
+                    <p class="mt-2 text-center text-[11px] leading-5 text-zinc-500">
+                        Usa tu correo para entrar o restablecer tu acceso a Spikia.
+                    </p>
+                </div>
 
-            <div class="w-full sm:max-w-md mt-6 px-6 py-4 bg-white shadow-md overflow-hidden sm:rounded-lg">
                 {{ $slot }}
             </div>
         </div>

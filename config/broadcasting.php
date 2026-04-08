@@ -2,19 +2,7 @@
 
 return [
 
-    /*
-    |--------------------------------------------------------------------------
-    | Default Broadcaster
-    |--------------------------------------------------------------------------
-    */
-
-    'default' => env('BROADCAST_CONNECTION', 'pusher'), // Asegúrate que tu .env diga pusher
-
-    /*
-    |--------------------------------------------------------------------------
-    | Broadcast Connections
-    |--------------------------------------------------------------------------
-    */
+    'default' => env('BROADCAST_CONNECTION', 'log'),
 
     'connections' => [
 
@@ -25,14 +13,13 @@ return [
             'app_id' => env('PUSHER_APP_ID'),
             'options' => [
                 'cluster' => env('PUSHER_APP_CLUSTER'),
-                'useTLS' => true, // Cambiado a true para conectar con los servidores de Pusher.com
+                'useTLS' => true,
                 'host' => 'api-'.env('PUSHER_APP_CLUSTER', 'mt1').'.pusher.com',
                 'port' => 443,
                 'scheme' => 'https',
             ],
             'client_options' => [
-                // Esto permite que Laragon envíe datos aunque no tengas SSL configurado en Windows
-                'verify' => false, 
+                'verify' => false,
             ],
         ],
 

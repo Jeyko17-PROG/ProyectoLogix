@@ -35,4 +35,9 @@ return [
         ],
     ],
 
+    'deepl' => [
+        'key' => env('DEEPL_KEY'),
+        'endpoint' => env('DEEPL_ENDPOINT'),
+    ],
+
 ];

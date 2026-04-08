@@ -9,8 +9,22 @@ class Transcripcion extends Model
     protected $table = 'transcripciones';
 
     protected $fillable = [
+        'user_id',
+        'sesion_id',
+        'slug',
         'texto',
         'idioma',
-        'sesion_id'
+        'audio_url',
+        'modo',
     ];
+
+    public function sesion()
+    {
+        return $this->belongsTo(Sesion::class);
+    }
+
+    public function user()
+    {
+        return $this->belongsTo(User::class);
+    }
 }

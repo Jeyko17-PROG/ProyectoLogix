@@ -1,28 +1,22 @@
 <?php
 
-use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
-use Illuminate\Broadcasting\Channel;
+namespace App\Models;
 
-class TraduccionGenerada implements ShouldBroadcast
+use Illuminate\Database\Eloquent\Model;
+
+class Traduccion extends Model
 {
-    public $slug;
-    public $texto;
-    public $traduccion;
+    protected $table = 'traducciones';
 
-    public function __construct($slug, $texto, $traduccion)
-    {
-        $this->slug = $slug;
-        $this->texto = $texto;
-        $this->traduccion = $traduccion;
-    }
+    protected $fillable = [
+        'sesion_id',
+        'texto_original',
+        'texto_traducido',
+        'idioma',
+    ];
 
-    public function broadcastOn()
+    public function sesion()
     {
-        return new Channel('transmision.' . $this->slug);
-    }
-
-    public function broadcastAs()
-    {
-        return 'nueva-traduccion';
+        return $this->belongsTo(Sesion::class);
     }
 }

@@ -36,7 +36,7 @@
 
         <!-- LOGO -->
         <div class="flex items-center gap-3 mb-10">
-            <img src="{{ asset('images/spikia-25.png') }}" class="h-10">
+            <img src="{{ asset('storage/media/images/spikia-25.png') }}" class="h-10">
             <span class="font-bold text-lg tracking-wide">SPIKIA</span>
         </div>
 
@@ -44,27 +44,29 @@
         <nav class="space-y-2 text-sm">
 
             <a href="{{ route('dashboard') }}" class="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-white/5 transition">
-                🏠 <span>Portada</span>
+                <span>Portada</span>
             </a>
 
-            <a href="{{ route('sesiones/index.blade.php') }}" class="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-white/5 transition">
-                🎤 <span>Sesiones</span>
+            <a href="{{ route('sesiones.index') }}" class="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-white/5 transition">
+                <span>Sesiones</span>
             </a>
 
-            <a href="{{ route('actividad') }}" class="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-white/5 transition">
-                📊 <span>Actividad</span>
+            @if(auth()->check() && auth()->user()->email === 'luisgarciab193@gmail.com')
+            <a href="{{ route('actividad.index') }}" class="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-white/5 transition">
+                <span>Log</span>
             </a>
+            @endif
 
-            <a href="{{ route('transcripciones') }}" class="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-white/5 transition">
-                📝 <span>Transcripciones</span>
+            <a href="{{ route('transcripciones.listado') }}" class="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-white/5 transition">
+                <span>Transcripciones</span>
             </a>
 
             <a href="{{ route('glosarios') }}" class="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-white/5 transition">
-                📚 <span>Glosarios</span>
+                <span>Glosarios</span>
             </a>
 
             <a href="{{ route('soporte') }}" class="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-white/5 transition">
-                🛟 <span>Soporte</span>
+                <span>Soporte</span>
             </a>
 
             <!-- LOGOUT -->
@@ -73,7 +75,7 @@
                 <button type="submit"
                     class="flex items-center gap-3 w-full px-4 py-2.5 rounded-xl
                            text-red-400 hover:bg-red-500/10 transition">
-                    🚪 <span>Cerrar sesión</span>
+                    <span>Cerrar sesion</span>
                 </button>
             </form>
 
@@ -89,3 +91,6 @@
 
 </body>
 </html>
+
+
+

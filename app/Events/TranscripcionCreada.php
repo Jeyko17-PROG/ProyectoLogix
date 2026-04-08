@@ -4,14 +4,13 @@ namespace App\Events;
 
 use App\Models\Transcripcion;
 use Illuminate\Broadcasting\Channel;
-use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
 
 class TranscripcionCreada implements ShouldBroadcastNow
 {
-    use Dispatchable, InteractsWithSockets, SerializesModels;
+    use Dispatchable, SerializesModels;
 
     public $transcripcion;
     public $slug;
@@ -27,11 +26,18 @@ class TranscripcionCreada implements ShouldBroadcastNow
         return new Channel('transmision.' . $this->slug);
     }
 
+    public function broadcastAs()
+    {
+        return 'TranscripcionCreada';
+    }
+
     public function broadcastWith()
     {
         return [
+            'id' => $this->transcripcion->id,
             'texto' => $this->transcripcion->texto,
             'idioma' => $this->transcripcion->idioma,
+            'audio_url' => $this->transcripcion->audio_url,
         ];
     }
 }

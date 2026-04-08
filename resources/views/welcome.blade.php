@@ -37,7 +37,7 @@
 </head>
 
 <body class="min-h-screen flex items-center justify-center 
-             bg-gradient-to-br from-black via-zinc-900 to-black">
+            bg-gradient-to-br from-black via-zinc-900 to-black">
 
     <!-- CARD BORDE ANIMADO -->
     <div class="relative w-full max-w-md p-[2px] rounded-2xl 
@@ -49,7 +49,7 @@
 
             <!-- LOGO -->
             <img
-                src="{{ asset('images/spikia-25.png') }}"
+                src="{{ asset('storage/media/images/spikia-25.png') }}"
                 alt="Spikia"
                 class="mx-auto h-32 mb-6 drop-shadow-[0_0_30px_rgba(124,58,237,0.6)]"
             >

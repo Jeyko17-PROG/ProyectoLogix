@@ -36,6 +36,12 @@
           }
         }
     </script>
+    @stack('head-scripts')
+    @stack('styles')
+    @vite(request()->routeIs('sesion.master', 'sesion.transmision', 'sesion.movil') ? ['resources/css/app.css'] : ['resources/css/app.css', 'resources/js/app.js'])
+    @if (request()->routeIs('sesion.master', 'sesion.transmision', 'sesion.movil'))
+        <script src="{{ asset('spikia-fallback.js') }}" defer></script>
+    @endif
 </head>
 
 <body class="min-h-screen bg-gradient-to-br from-black via-zinc-900 to-black text-white">

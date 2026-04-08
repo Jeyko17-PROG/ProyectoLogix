@@ -3,23 +3,24 @@
 namespace App\Events;
 
 use Illuminate\Broadcasting\Channel;
+use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
 
 class NuevaTraduccion implements ShouldBroadcast
 {
-    use Dispatchable, SerializesModels;
+    use Dispatchable, InteractsWithSockets, SerializesModels;
 
     public $slug;
-    public $texto;
+    public $id;
     public $traduccion;
     public $idioma;
 
-    public function __construct($slug, $texto, $traduccion, $idioma)
+    public function __construct($slug, $id, $traduccion, $idioma)
     {
         $this->slug = $slug;
-        $this->texto = $texto;
+        $this->id = $id;
         $this->traduccion = $traduccion;
         $this->idioma = $idioma;
     }
@@ -31,6 +32,15 @@ class NuevaTraduccion implements ShouldBroadcast
 
     public function broadcastAs()
     {
-        return 'nueva-traduccion';
+        return 'NuevaTraduccion';
+    }
+
+    public function broadcastWith()
+    {
+        return [
+            'id' => $this->id,
+            'texto' => $this->traduccion,
+            'idioma' => $this->idioma,
+        ];
     }
 }
