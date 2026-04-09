@@ -12,6 +12,7 @@ export default defineConfig({
                 'resources/css/sessions-mobile.css',
                 'resources/js/app.js',
                 'resources/js/master.js',
+                'resources/js/sessions-index.js',
             ],
             refresh: true,
         }),

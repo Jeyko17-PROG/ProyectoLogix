@@ -16,6 +16,12 @@
 /public/build
 /public/hot
 /public/storage
+
+# Frontend build artifacts
+/public/build/assets
+/public/build/manifest.json
+*.vite
+vite.config.ts.timestamp*
 /storage/*.key
 /storage/pail
 /vendor
