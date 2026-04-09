@@ -1,6 +1,10 @@
 @use('SimpleSoftwareIO\QrCode\Facades\QrCode')
 @extends('layouts.spikia')
 
+@push('styles')
+@vite('resources/css/sessions-index.css')
+@endpush
+
 @section('content')
 <div class="min-h-screen bg-[#050505] text-white px-6 py-10">
     <div class="max-w-7xl mx-auto space-y-8">
@@ -207,16 +211,6 @@
         </div>
     </div>
 </div>
-
-<style>
-    .sessions-table-time-badge {
-        display: none !important;
-    }
-
-    tbody tr td:nth-child(5) span.inline-flex.h-6.w-6.items-center.justify-center.rounded-full {
-        display: none !important;
-    }
-</style>
 
 <script>
     function copyToClipboard(text) {

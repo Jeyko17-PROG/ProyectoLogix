@@ -2,6 +2,10 @@
 
 @section('title', 'Spikia - ' . $sesion->titulo)
 
+@push('styles')
+@vite('resources/css/sessions-live.css')
+@endpush
+
 @section('content')
 <div class="flex flex-col h-screen bg-black text-white font-sans overflow-hidden relative">
     <div class="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,#1e1b4b,transparent)] opacity-60"></div>
@@ -57,19 +61,6 @@
         </button>
     </div>
 </div>
-
-<style>
-    @keyframes subtitleIn {
-        from { opacity: 0; transform: translateY(20px); filter: blur(10px); }
-        to { opacity: 1; transform: translateY(0); filter: blur(0); }
-    }
-    .animate-subtitle-in { animation: subtitleIn 0.4s ease-out forwards; }
-    .active-lang {
-        border-color: #00f3ff !important;
-        color: #00f3ff !important;
-        background: rgba(0, 243, 255, 0.1) !important;
-    }
-</style>
 
 @php
     $listenerLanguageLabels = [];

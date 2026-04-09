@@ -3,77 +3,7 @@
 @section('title', 'Spikia - ' . $sesion->titulo)
 
 @push('styles')
-<style>
-    body {
-        background-color: #0b0b0b;
-    }
-    .mobile-container {
-        width: 100%;
-        max-width: 400px;
-        padding: 20px;
-        text-align: center;
-        margin: 0 auto;
-    }
-    .card {
-        background: #121212;
-        border: 1px solid #7C3AED;
-        border-radius: 20px;
-        padding: 40px 20px;
-        box-shadow: 0 0 20px rgba(124, 58, 237, 0.2);
-    }
-    .logo {
-        width: 120px;
-        margin-bottom: 20px;
-    }
-    h1 {
-        font-size: 1.5rem;
-        margin-bottom: 10px;
-    }
-    p {
-        color: #bbb;
-        margin-bottom: 30px;
-    }
-    .btn-assist {
-        background: #7C3AED;
-        color: white;
-        border: none;
-        padding: 15px 40px;
-        border-radius: 30px;
-        font-weight: bold;
-        font-size: 1.1rem;
-        cursor: pointer;
-        width: 100%;
-        transition: transform 0.2s;
-    }
-    .btn-assist:active {
-        transform: scale(0.95);
-    }
-    .btn-lang {
-        background: #1a1a1a;
-        color: white;
-        border: 1px solid #333;
-        padding: 15px;
-        border-radius: 12px;
-        font-size: 1rem;
-        cursor: pointer;
-        text-align: left;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 10px;
-        width: 100%;
-    }
-    .btn-lang:hover {
-        border-color: #7C3AED;
-        background: #222;
-    }
-    .dot {
-        height: 10px;
-        width: 10px;
-        background-color: #7C3AED;
-        border-radius: 50%;
-    }
-</style>
+@vite('resources/css/sessions-mobile.css')
 @endpush
 
 @section('content')
