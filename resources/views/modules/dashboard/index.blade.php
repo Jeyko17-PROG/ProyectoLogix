@@ -6,8 +6,7 @@
 
 <div class="flex min-h-screen text-white font-sans selection:bg-neonBlue/30">
 
-    <aside class="w-64 bg-zinc-950 border-r border-white/10 px-5 py-6 flex flex-col sticky top-0 h-screen overflow-y-auto">
-        <div class="flex items-center justify-center px-2 w-full">
+    <aside id="sidebar" class="fixed top-0 left-0 w-64 h-screen bg-zinc-950 border-r border-white/10 px-5 py-6 transform -translate-x-full transition-transform duration-300 z-50">
             <img src="{{ asset('storage/media/images/spikia-25.png') }}" class="h-24 w-auto object-contain" alt="Spikia">
         </div>
 
@@ -65,9 +64,8 @@
 
                     <form method="POST" action="{{ route('logout') }}">
                         @csrf
-                        <button type="submit" class="w-full flex items-center justify-between px-4 py-3 rounded-2xl transition-all duration-200 text-red-200 bg-red-500/10 border border-red-500/20 hover:bg-red-500/20 hover:border-red-500/40 hover:text-white">
-                            <span class="font-semibold text-[15px] tracking-wide">Cerrar sesión</span>
-                            <span class="text-red-300">></span>
+                        <button id="hamburgerBtn" class="text-white text-2xl">
+                                ☰
                         </button>
                     </form>
                 </div>
