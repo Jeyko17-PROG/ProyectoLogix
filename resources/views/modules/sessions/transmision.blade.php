@@ -7,6 +7,19 @@
 @endpush
 
 @section('content')
+@php
+    $translationDefaults = config('spikia.translation_simultaneous', []);
+    $sessionTranslation = array_merge([
+        'translation_mode' => 'voice_to_voice',
+        'speech_to_text_model' => $translationDefaults['speech_to_text_model'] ?? 'gpt-4o-mini-transcribe',
+        'translation_model' => $translationDefaults['translation_model'] ?? 'gpt-5.4-mini',
+        'text_to_speech_model' => $translationDefaults['text_to_speech_model'] ?? 'gpt-4o-mini-tts',
+        'voice_provider' => $translationDefaults['voice_provider'] ?? 'elevenlabs',
+        'voice_gender_profile' => $translationDefaults['voice_gender_profile'] ?? 'female',
+        'voice' => $translationDefaults['voice'] ?? 'marin',
+        'audio_delivery_mode' => $translationDefaults['audio_delivery_mode'] ?? 'ultra_fast',
+    ], is_array($sesion->translation_settings ?? null) ? $sesion->translation_settings : []);
+@endphp
 <div class="flex flex-col h-screen bg-black text-white font-sans overflow-hidden relative">
     <div class="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,#1e1b4b,transparent)] opacity-60"></div>
 
@@ -34,6 +47,20 @@
         </div>
     </header>
 
+    <div class="relative z-10 px-6 pt-4">
+        @include('modules.sessions.partials.demo-banner', ['sesion' => $sesion])
+    </div>
+
+    <div class="relative z-10 px-6 pt-3">
+        <div class="inline-flex flex-wrap items-center gap-2 rounded-full border border-cyan-400/15 bg-cyan-400/5 px-4 py-2 text-[10px] font-black uppercase tracking-[0.28em] text-cyan-100">
+            <span>{{ ($sessionTranslation['translation_mode'] ?? 'voice_to_voice') === 'voice_to_voice' ? 'Modo voz a voz' : 'Modo voz a texto' }}</span>
+            <span class="text-zinc-500">/</span>
+            <span>IA {{ $sessionTranslation['translation_model'] ?? 'gpt-5.4-mini' }}</span>
+            <span class="text-zinc-500">/</span>
+            <span>Voz {{ $sessionTranslation['voice'] ?? 'marin' }}</span>
+        </div>
+    </div>
+
     <div class="relative z-10 p-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 border-b border-white/5 bg-zinc-900/30 backdrop-blur-sm">
         @foreach(config('spikia.listener_languages', []) as $language)
             <button class="mobile-lang-btn py-3 rounded-xl text-[10px] font-black tracking-widest border border-white/5 text-zinc-500 hover:text-white bg-zinc-950 transition-all shadow-lg active:scale-95 {{ $language['id'] === 'es-ES' ? 'lang-active' : '' }}" data-lang="{{ $language['id'] }}">
@@ -60,6 +87,16 @@
             </svg>
         </button>
     </div>
+
+    {{-- Avatar 3D en Lengua de Señas: modulo opcional. Si el flag global o el toggle de esta
+    sala estan apagados, Blade ni siquiera renderiza el contenedor ni carga avatar-engine.js:
+    el navegador del oyente no descarga JS ni assets pesados en segundo plano. --}}
+    @if(config('spikia.features.sign_avatar') && $sesion->has_sign_avatar)
+        <div id="sign-avatar-container" class="hidden md:block fixed bottom-8 left-8 z-40 w-64 h-64 rounded-3xl border border-white/10 bg-zinc-950/80 backdrop-blur-md overflow-hidden shadow-2xl">
+            <canvas id="avatar-canvas" class="w-full h-full"></canvas>
+        </div>
+        @vite(['resources/js/avatar-engine.js'])
+    @endif
 </div>
 
 @php
@@ -71,10 +108,16 @@
     }
     $listenerConfig = [
         'slug' => $sesion->slug,
-        'socketUrl' => request()->getScheme() . '://' . request()->getHost() . ':3000',
-        'feedUrl' => route('sesiones.mensajes.feed', ['slug' => $sesion->slug]),
+        'socketUrl' => config('spikia.socket_enabled') ? (config('spikia.socket_url') ?: request()->getScheme() . '://' . request()->getHost() . ':3000') : null,
+        'feedUrl' => route('sesiones.mensajes.feed', ['slug' => $sesion->slug], false),
         'defaultLang' => 'es-ES',
         'languageLabels' => $listenerLanguageLabels,
+        'voiceProvider' => $sessionTranslation['voice_provider'] ?? 'elevenlabs',
+        'voiceEndpoint' => route('voz.elevenlabs', [], false),
+        'voiceStreamEndpoint' => route('voz.elevenlabs.stream', [], false),
+        'audioDefaultEnabled' => ($sessionTranslation['translation_mode'] ?? 'voice_to_voice') === 'voice_to_voice',
+        'preferLowLatencyAudio' => ($sessionTranslation['audio_delivery_mode'] ?? 'ultra_fast') === 'ultra_fast',
+        'translationSettings' => $sessionTranslation,
     ];
 @endphp
 
@@ -82,5 +125,6 @@
 <script>
     window.__SPIKIA_LISTENER__ = @json($listenerConfig);
 </script>
+@vite('resources/js/listener.js')
 @endpush
 @endsection

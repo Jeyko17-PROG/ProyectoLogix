@@ -5,6 +5,18 @@
 @endpush
 
 @section('content')
+@php
+    $tsConfig = config('spikia.translation_simultaneous', []);
+    $sessionTranslation = array_merge([
+        'translation_mode' => 'voice_to_voice',
+        'speech_to_text_model' => $tsConfig['speech_to_text_model'] ?? 'gpt-4o-mini-transcribe',
+        'translation_model' => $tsConfig['translation_model'] ?? 'gpt-5.4-mini',
+        'text_to_speech_model' => $tsConfig['text_to_speech_model'] ?? 'gpt-4o-mini-tts',
+        'voice' => $tsConfig['voice'] ?? 'marin',
+        'audio_delivery_mode' => $tsConfig['audio_delivery_mode'] ?? 'ultra_fast',
+        'master_translation_prompt' => $tsConfig['master_translation_prompt'] ?? '',
+    ], is_array($sesion->translation_settings ?? null) ? $sesion->translation_settings : []);
+@endphp
 <div class="main-wrapper">
     <div class="brand-header">
         <img src="{{ asset('storage/media/images/spikia-25.png') }}" class="logo-main">
@@ -60,10 +72,65 @@
                 <label class="idioma-item"><input type="checkbox" name="idiomas[]" value="es" {{ in_array('es', $idiomas_actuales) ? 'checked' : '' }}> Español</label>
             </div>
 
+            <label class="label-mini">Modo de Traducción</label>
+            <div class="idiomas-grid">
+                <label class="idioma-item"><input type="radio" name="translation_mode" value="voice_to_text" {{ ($sessionTranslation['translation_mode'] ?? '') === 'voice_to_text' ? 'checked' : '' }}> Voz a texto</label>
+                <label class="idioma-item"><input type="radio" name="translation_mode" value="voice_to_voice" {{ ($sessionTranslation['translation_mode'] ?? '') === 'voice_to_voice' ? 'checked' : '' }}> Voz a voz</label>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                <div>
+                    <label class="label-mini">Modelo STT</label>
+                    <select name="speech_to_text_model" class="select-spikia">
+                        @foreach(($tsConfig['available_stt_models'] ?? []) as $model)
+                            <option value="{{ $model['value'] }}" {{ ($sessionTranslation['speech_to_text_model'] ?? '') === $model['value'] ? 'selected' : '' }}>{{ $model['label'] }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div>
+                    <label class="label-mini">Modelo de Traducción</label>
+                    <select name="translation_model" class="select-spikia">
+                        @foreach(($tsConfig['available_translation_models'] ?? []) as $model)
+                            <option value="{{ $model['value'] }}" {{ ($sessionTranslation['translation_model'] ?? '') === $model['value'] ? 'selected' : '' }}>{{ $model['label'] }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div>
+                    <label class="label-mini">Modelo de Voz</label>
+                    <select name="text_to_speech_model" class="select-spikia">
+                        <option value="{{ $tsConfig['text_to_speech_model'] ?? 'gpt-4o-mini-tts' }}">{{ $tsConfig['text_to_speech_model'] ?? 'gpt-4o-mini-tts' }}</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="label-mini">Voz</label>
+                    <select name="voice" class="select-spikia">
+                        @foreach(($tsConfig['available_voices'] ?? []) as $voice)
+                            <option value="{{ $voice }}" {{ ($sessionTranslation['voice'] ?? '') === $voice ? 'selected' : '' }}>{{ $voice }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div style="grid-column: 1 / -1;">
+                    <label class="label-mini">Prioridad de audio</label>
+                    <select name="audio_delivery_mode" class="select-spikia">
+                        @foreach(($tsConfig['available_audio_delivery_modes'] ?? []) as $mode)
+                            <option value="{{ $mode['value'] }}" {{ ($sessionTranslation['audio_delivery_mode'] ?? '') === $mode['value'] ? 'selected' : '' }}>{{ $mode['label'] }}</option>
+                        @endforeach
+                    </select>
+                </div>
+            </div>
+
+            <label class="label-mini">Prompt Maestro</label>
+            <textarea name="master_translation_prompt" class="input-spikia" rows="5">{{ $sessionTranslation['master_translation_prompt'] ?? '' }}</textarea>
+
+            @if(config('spikia.features.sign_avatar'))
+                <label class="idioma-item" style="margin-top: 20px;">
+                    <input type="checkbox" name="has_sign_avatar" value="1" {{ $sesion->has_sign_avatar ? 'checked' : '' }}>
+                    Avatar 3D en Lengua de Señas (beta) — solo para esta sala
+                </label>
+            @endif
+
             <button type="submit" class="btn-save">ACTUALIZAR CONFIGURACIÓN COMPLETA</button>
         </form>
     </div>
 </div>
 @endsection
-
-

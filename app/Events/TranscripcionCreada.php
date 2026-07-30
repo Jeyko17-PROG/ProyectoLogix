@@ -38,6 +38,12 @@ class TranscripcionCreada implements ShouldBroadcastNow
             'texto' => $this->transcripcion->texto,
             'idioma' => $this->transcripcion->idioma,
             'audio_url' => $this->transcripcion->audio_url,
+            'genero' => $this->transcripcion->genero,
+            'variante' => $this->transcripcion->variante,
+            'tipo' => $this->transcripcion->tipo,
+            'published_at' => $this->transcripcion->published_at,
+            'available_at' => $this->transcripcion->available_at,
+            'revision' => $this->transcripcion->revision ?? 1,
         ];
     }
 }

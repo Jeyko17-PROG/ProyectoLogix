@@ -1,18 +1,20 @@
 @extends('layouts.spikia')
 
+@section('title', 'Acceso a actividad | Spikia')
+
 @section('content')
-<div class="min-h-screen bg-[#050505] text-white flex items-center justify-center px-6 py-12">
+<div class="flex min-h-screen items-center justify-center bg-[#050505] px-6 py-12 text-white">
     <div class="w-full max-w-lg rounded-[2.5rem] border border-white/10 bg-zinc-950/90 p-8 shadow-[0_25px_80px_rgba(0,0,0,0.55)] backdrop-blur-xl">
-        <div class="flex items-center gap-4 mb-6">
+        <div class="mb-6 flex items-center gap-4">
             <img src="{{ asset('storage/media/images/spikia-25.png') }}" alt="Spikia" class="h-12 w-auto">
             <div>
                 <p class="text-[10px] font-black uppercase tracking-[0.35em] text-zinc-500">Acceso restringido</p>
-                <h1 class="text-3xl font-black italic tracking-tighter">Log</h1>
+                <h1 class="text-3xl font-black italic tracking-tighter">Actividad</h1>
             </div>
         </div>
 
         <p class="text-sm leading-6 text-zinc-300">
-            Esta sección está protegida. Si no eres el correo administrador, escribe el pin de 4 dígitos para continuar.
+            Esta sección está protegida. Si no eres el correo administrador, escribe el PIN de 4 dígitos para continuar.
         </p>
 
         @if ($errors->has('pin'))
@@ -40,7 +42,7 @@
             </div>
 
             <button type="submit" class="w-full rounded-2xl bg-white px-5 py-4 text-sm font-black uppercase tracking-[0.35em] text-black transition hover:bg-neonBlue hover:text-white">
-                Entrar a Log
+                Entrar a actividad
             </button>
         </form>
     </div>

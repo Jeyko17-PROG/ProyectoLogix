@@ -40,4 +40,13 @@ return [
         'endpoint' => env('DEEPL_ENDPOINT'),
     ],
 
+    'openai' => [
+        'key' => env('OPENAI_API_KEY'),
+    ],
+
+    'deepgram' => [
+        'key' => env('DEEPGRAM_API_KEY'),
+        'project_id' => env('DEEPGRAM_PROJECT_ID'),
+    ],
+
 ];

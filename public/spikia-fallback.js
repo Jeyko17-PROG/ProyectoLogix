@@ -1,4 +1,6 @@
 (function () {
+  if (window.__SPIKIA_MASTER__ || window.__SPIKIA_LISTENER__) return;
+
   const has = (v) => v !== null && v !== undefined;
   const clean = (t) => String(t || '').replace(/^\uFEFF+/, '').replace(/[\uFEFF\u200B\u200C\u200D]/g, '').trim();
   const repeat = (t) => clean(t).replace(/\s+/g, ' ').replace(/\b(\w+)(?:\s+\1\b)+/gi, '$1');
@@ -131,7 +133,7 @@
         clearDraft();
         const now = Date.now();
         st.last = txt; st.lastAt = now; st.cool = now + 1500;
-        const availableAt = now + 3000;
+        const availableAt = now + 1000;
         show(txt);
         const id = crypto.randomUUID();
         postRelay(txt, st.langBase, st.lang, 'original', id);
@@ -212,24 +214,117 @@
     };
 
     let current = localStorage.getItem('spikia_mobile_lang') || c.defaultLang || 'es-ES';
-    let audio = localStorage.getItem('spikia_audio_enabled') === 'true';
+    const storedAudioSetting = localStorage.getItem('spikia_audio_enabled');
+    let audio = storedAudioSetting === null ? !!c.audioDefaultEnabled : storedAudioSetting === 'true';
+    const voiceProviderStorageKey = 'spikia_voice_provider';
+    let currentVoiceAudio = null;
     let initialDone = false;
     let seen = new Set(), seenKey = new Set(), last = '', lastAt = 0, busy = false;
     const pageLoadedAt = Date.now();
+    const pendingDisplayTimeouts = new Set();
+    let languageSelectionVersion = 0;
 
     const clearUI = () => {
+      pendingDisplayTimeouts.forEach((timeoutId) => window.clearTimeout(timeoutId));
+      pendingDisplayTimeouts.clear();
       box.innerHTML = '<p id="placeholder" class="text-zinc-600 font-light italic text-lg animate-pulse tracking-wide">Selecciona tu idioma arriba...</p>';
-      if (list) list.innerHTML = '<div class="rounded-2xl border border-dashed border-white/10 bg-white/5 px-4 py-3 text-sm text-zinc-500">Los mensajes traducidos apareceran aqui despues del retardo minimo de 3 segundos.</div>';
+      if (list) list.innerHTML = '<div class="rounded-2xl border border-dashed border-white/10 bg-white/5 px-4 py-3 text-sm text-zinc-500">Los mensajes traducidos apareceran aqui casi en tiempo real.</div>';
     };
     const audioUI = () => {
       if (on) on.classList.toggle('hidden', !audio);
       if (off) off.classList.toggle('hidden', audio);
       if (audioBg) audioBg.classList.toggle('opacity-100', audio);
     };
+    const getVoiceProvider = () => {
+      const stored = localStorage.getItem(voiceProviderStorageKey);
+      return (stored || c.voiceProvider || 'browser').toLowerCase() === 'elevenlabs' ? 'elevenlabs' : 'browser';
+    };
+    const stopCurrentVoiceAudio = () => {
+      if (!currentVoiceAudio) return;
+      try {
+        currentVoiceAudio.pause();
+        currentVoiceAudio.currentTime = 0;
+      } catch (e) {}
+      if (currentVoiceAudio._spikiaObjectUrl) URL.revokeObjectURL(currentVoiceAudio._spikiaObjectUrl);
+      currentVoiceAudio = null;
+    };
+    const speakWithBrowser = (text, lang, variante, gender) => {
+      if (!('speechSynthesis' in window)) return false;
+      window.speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      const map = {
+        en: 'en-US',
+        es: variante === 'es-419' ? 'es-MX' : 'es-ES',
+        'es-ES': 'es-ES',
+        'es-419': 'es-MX',
+        pt: 'pt-BR',
+        it: 'it-IT',
+        fr: 'fr-FR',
+      };
+      u.lang = map[variante || lang] || 'es-ES';
+      u.rate = 0.96;
+      u.pitch = String(gender || '').toLowerCase() === 'male' ? 0.92 : 1.08;
+      const voices = window.speechSynthesis.getVoices();
+      const matches = voices.filter(v => v.lang && v.lang.includes(u.lang));
+      if (matches[0]) u.voice = matches[0];
+      u.onend = () => audioState(false);
+      u.onerror = () => audioState(false);
+      audioState(true);
+      window.speechSynthesis.speak(u);
+      return true;
+    };
+    const speakWithElevenLabs = async (text, lang, variante, gender) => {
+      if (getVoiceProvider() !== 'elevenlabs' || !c.voiceEndpoint) return false;
+      try {
+        const res = await fetch(c.voiceEndpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Accept: 'audio/mpeg, audio/*;q=0.9', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '' },
+          body: JSON.stringify({ text, lang, variante, gender }),
+        });
+        if (!res.ok) return false;
+        const blob = await res.blob();
+        if (!blob.size) return false;
+        stopCurrentVoiceAudio();
+        const objectUrl = URL.createObjectURL(blob);
+        const audioEl = new Audio(objectUrl);
+        audioEl._spikiaObjectUrl = objectUrl;
+        currentVoiceAudio = audioEl;
+        audioEl.onended = () => { if (currentVoiceAudio === audioEl) { stopCurrentVoiceAudio(); audioState(false); } };
+        audioEl.onerror = () => { if (currentVoiceAudio === audioEl) { stopCurrentVoiceAudio(); audioState(false); } };
+        audioState(true);
+        await audioEl.play();
+        return true;
+      } catch (e) {
+        stopCurrentVoiceAudio();
+        audioState(false);
+        return false;
+      }
+    };
+    const playProvidedAudio = async (audioUrl) => {
+      if (!audioUrl) return false;
+      try {
+        stopCurrentVoiceAudio();
+        const audioEl = new Audio(audioUrl);
+        currentVoiceAudio = audioEl;
+        audioEl.onended = () => { if (currentVoiceAudio === audioEl) { stopCurrentVoiceAudio(); audioState(false); } };
+        audioEl.onerror = () => { if (currentVoiceAudio === audioEl) { stopCurrentVoiceAudio(); audioState(false); } };
+        audioState(true);
+        await audioEl.play();
+        return true;
+      } catch (e) {
+        stopCurrentVoiceAudio();
+        audioState(false);
+        return false;
+      }
+    };
     const setLive = () => { dot.className = 'w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_10px_#22d3ee]'; status.innerText = 'EN LINEA'; };
     const setOff = () => { dot.className = 'w-2 h-2 rounded-full bg-red-500 shadow-[0_0_10px_red]'; status.innerText = 'DESCONECTADO'; };
     const setLabel = (l) => { if (labelEl) labelEl.textContent = `${label(l, c.languageLabels)} · ${(l || 'es-ES').toUpperCase()}`; };
-    const hi = (l) => langBtns.forEach((b) => b.classList.toggle('active-lang', b.dataset.lang === l));
+    const hi = (l) => langBtns.forEach((b) => {
+      const active = b.dataset.lang === l;
+      b.classList.toggle('active-lang', active);
+      b.classList.toggle('lang-active', active);
+    });
     const match = (m) => {
       const lang = m.idioma || 'es', v = m.variante || '';
       if (current === 'es-ES') return lang === 'es' && (!v || v === 'es-ES');
@@ -265,29 +360,50 @@
       if (key === last && Date.now() - lastAt < 8000) return;
       const delay = Number(n.available_at || 0);
       const wait = delay > 0 ? Math.max(0, (delay < 1e11 ? delay * 1000 : delay) - Date.now()) : 0;
-      setTimeout(() => {
+      const selectionVersionAtQueue = languageSelectionVersion;
+      const timeoutId = window.setTimeout(() => {
+        pendingDisplayTimeouts.delete(timeoutId);
+        if (selectionVersionAtQueue !== languageSelectionVersion) return;
+        if (!match(n)) return;
+
         last = key; lastAt = Date.now(); show(n.texto);
         if (list) {
           const item = document.createElement('article');
           item.className = 'rounded-2xl border border-white/10 bg-white/5 px-4 py-3 flex items-start justify-between gap-4';
-          item.innerHTML = `<div class="min-w-0 flex-1"><div class="flex items-center gap-3 mb-2"><span class="inline-flex items-center rounded-full border border-neonBlue/30 bg-neonBlue/10 px-2 py-1 text-[9px] font-black uppercase tracking-[0.3em] text-neonBlue">${(n.variante || n.idioma || 'es').toString().toUpperCase()}</span><span class="text-[10px] font-black uppercase tracking-[0.25em] text-zinc-500">Liberado +3s</span></div><p class="text-sm text-white/90 leading-6 break-words">${n.texto}</p></div><div class="text-right shrink-0"><p class="text-[10px] font-black uppercase tracking-[0.25em] text-zinc-500">${new Date((n.published_at || Date.now()/1000) * 1000).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'})}</p></div>`;
+          item.innerHTML = `<div class="min-w-0 flex-1"><div class="flex items-center gap-3 mb-2"><span class="inline-flex items-center rounded-full border border-neonBlue/30 bg-neonBlue/10 px-2 py-1 text-[9px] font-black uppercase tracking-[0.3em] text-neonBlue">${(n.variante || n.idioma || 'es').toString().toUpperCase()}</span><span class="text-[10px] font-black uppercase tracking-[0.25em] text-zinc-500">Liberado +1s</span></div><p class="text-sm text-white/90 leading-6 break-words">${n.texto}</p></div><div class="text-right shrink-0"><p class="text-[10px] font-black uppercase tracking-[0.25em] text-zinc-500">${new Date((n.published_at || Date.now()/1000) * 1000).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'})}</p></div>`;
           list.prepend(item);
           while (list.children.length > 6) list.removeChild(list.lastElementChild);
         }
-        if (audio && 'speechSynthesis' in window) {
-          window.speechSynthesis.cancel();
-          const u = new SpeechSynthesisUtterance(n.texto);
+        if (audio) {
           const lang = n.variante || n.idioma;
-          u.lang = lang === 'es-419' ? 'es-MX' : (map[lang]?.speech || 'es-ES');
-          u.rate = 1;
-          u.pitch = String(n.genero || '').toLowerCase() === 'male' ? 0.85 : 1.15;
-          u.onend = () => audioState(false);
-          u.onerror = () => audioState(false);
-          const voices = window.speechSynthesis.getVoices().filter(v => v.lang && v.lang.includes(u.lang));
-          if (voices[0]) u.voice = voices[0];
-          audioState(true); window.speechSynthesis.speak(u);
+          if (n.audio_url) {
+            playProvidedAudio(n.audio_url).then((ok) => {
+              if (!ok && (c.translationSettings?.translation_mode || 'voice_to_voice') === 'voice_to_voice') {
+                const elevenFallback = getVoiceProvider() === 'elevenlabs' && c.voiceEndpoint;
+                if (elevenFallback) {
+                  speakWithElevenLabs(n.texto, lang, n.variante || '', n.genero || '').then((elevenOk) => {
+                    if (!elevenOk) speakWithBrowser(n.texto, lang, n.variante || '', n.genero || '');
+                  });
+                } else {
+                  speakWithBrowser(n.texto, lang, n.variante || '', n.genero || '');
+                }
+              }
+            });
+          } else if ((c.translationSettings?.translation_mode || 'voice_to_voice') === 'voice_to_voice') {
+            const eleven = getVoiceProvider() === 'elevenlabs' && c.voiceEndpoint;
+            if (eleven) {
+              speakWithElevenLabs(n.texto, lang, n.variante || '', n.genero || '').then((ok) => {
+                if (!ok) {
+                  speakWithBrowser(n.texto, lang, n.variante || '', n.genero || '');
+                }
+              });
+            } else {
+              speakWithBrowser(n.texto, lang, n.variante || '', n.genero || '');
+            }
+          }
         }
       }, wait);
+      pendingDisplayTimeouts.add(timeoutId);
     };
     const audioState = (a) => {
       if (a) { if (on) on.classList.remove('hidden'); if (off) off.classList.add('hidden'); if (audioBg) audioBg.classList.add('opacity-100'); }
@@ -321,9 +437,9 @@
     };
 
     clearUI(); audioUI(); hi(current); setLabel(current);
-    langBtns.forEach((b) => b.addEventListener('click', () => { current = b.dataset.lang; localStorage.setItem('spikia_mobile_lang', current); clearUI(); hi(current); setLabel(current); poll(true); }));
-    audioBtn.addEventListener('click', () => { audio = !audio; localStorage.setItem('spikia_audio_enabled', String(audio)); audioUI(); if (audio && 'speechSynthesis' in window) try { window.speechSynthesis.speak(new SpeechSynthesisUtterance('')); } catch (e) {} else if ('speechSynthesis' in window) window.speechSynthesis.cancel(); });
-    poll(true); window.setInterval(() => poll(false), 300);
+    langBtns.forEach((b) => b.addEventListener('click', () => { current = b.dataset.lang; languageSelectionVersion += 1; localStorage.setItem('spikia_mobile_lang', current); clearUI(); hi(current); setLabel(current); poll(true); }));
+    audioBtn.addEventListener('click', () => { audio = !audio; localStorage.setItem('spikia_audio_enabled', String(audio)); audioUI(); if (audio && 'speechSynthesis' in window) try { window.speechSynthesis.speak(new SpeechSynthesisUtterance('')); } catch (e) {} else { stopCurrentVoiceAudio(); if ('speechSynthesis' in window) window.speechSynthesis.cancel(); } });
+    poll(true); window.setInterval(() => poll(false), 200);
   }
 
   ready(() => { initMaster(); initListener(); });

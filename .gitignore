@@ -24,7 +24,18 @@
 vite.config.ts.timestamp*
 /storage/*.key
 /storage/pail
+
+# Backups/dumps de base de datos: nunca deben versionarse (contienen datos reales de usuarios)
+*.sql
+*.sql.gz
+storage/app/*backup*
 /vendor
 Homestead.json
 Homestead.yaml
 Thumbs.db
+
+# Binarios de tuneles (se descargan aparte, no se versionan)
+*.exe
+*.msi
+cloudflared.exe
+ngrok.exe

@@ -10,7 +10,10 @@ class GlosarioController extends Controller
 {
     public function index()
     {
-        $glosarios = Glosario::where('user_id', auth()->id())->get();
+        $glosarios = Glosario::where('user_id', auth()->id())
+            ->latest()
+            ->paginate(12)
+            ->withQueryString();
 
         return view('modules.glossary.index', compact('glosarios'));
     }
@@ -47,7 +50,7 @@ class GlosarioController extends Controller
 
         $glosario->update([
             'titulo' => $data['titulo'],
-            'idioma' => $data['idioma'] ?? null,
+            'idioma' => $data['idioma'] ?? 'es',
             'terminos' => $data['terminos'] ?? null,
         ]);
 

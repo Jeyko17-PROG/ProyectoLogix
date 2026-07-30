@@ -4,7 +4,7 @@
 <div class="min-h-screen bg-[#050505] text-white font-sans selection:bg-[#7000ff]/30 selection:text-white">
     <div class="fixed inset-0 bg-[radial-gradient(circle_at_top_left,rgba(112,0,255,0.18),transparent_38%),radial-gradient(circle_at_bottom_right,rgba(0,210,255,0.10),transparent_35%)] pointer-events-none"></div>
 
-    <div class="relative z-10 max-w-7xl mx-auto px-6 py-8 lg:px-10 lg:py-10">
+    <div class="relative z-10 spikia-page">
         <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-8 mb-10">
             <div class="space-y-5">
                 <a href="{{ route('dashboard') }}" class="inline-flex items-center gap-3 text-[10px] font-black uppercase tracking-[0.35em] text-zinc-500 hover:text-white transition">
@@ -24,14 +24,12 @@
             </div>
 
             <div class="flex flex-col items-start lg:items-end gap-4">
-                @if(Storage::disk('public')->exists('media/images/spikia-25.png'))
-                    <img src="{{ asset('storage/media/images/spikia-25.png') }}" class="h-20 w-auto opacity-90" alt="Spikia">
-                @endif
+                <img src="{{ asset('storage/media/images/spikia-25.png') }}" class="h-20 w-auto opacity-90" alt="Spikia">
 
                 <div class="grid grid-cols-3 gap-3">
                     <div class="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 min-w-[110px]">
                         <p class="text-[9px] font-black uppercase tracking-[0.35em] text-zinc-500">Sesiones</p>
-                        <p class="mt-2 text-2xl font-black">{{ count($resumenes ?? []) }}</p>
+                        <p class="mt-2 text-2xl font-black">{{ $resumenes->total() }}</p>
                     </div>
                     <div class="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 min-w-[110px]">
                         <p class="text-[9px] font-black uppercase tracking-[0.35em] text-zinc-500">Modo</p>
@@ -40,7 +38,7 @@
                     <div class="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 min-w-[110px]">
                         <p class="text-[9px] font-black uppercase tracking-[0.35em] text-zinc-500">Total</p>
                         <p class="mt-2 text-2xl font-black">
-                            {{ collect($resumenes ?? [])->sum(fn ($resumen) => $resumen['idiomas']->sum(fn ($idioma) => $idioma['items']->count())) }}
+                            {{ collect($resumenes->items() ?? [])->sum(fn ($resumen) => $resumen['idiomas']->sum(fn ($idioma) => $idioma['items_count'] ?? 0)) }}
                         </p>
                     </div>
                 </div>
@@ -88,7 +86,7 @@
         </div>
 
         <div class="space-y-6">
-            @forelse(($resumenes ?? []) as $resumen)
+            @forelse($resumenes as $resumen)
                 @php
                     $sesion = $resumen['sesion'];
                     $idiomas = $resumen['idiomas'];
@@ -123,9 +121,10 @@
                             @php
                                 $modoFila = $idiomaData['modo'] ?? 'resumen';
                                 $itemsIdioma = $idiomaData['items'] ?? collect();
+                                $itemsCount = $idiomaData['items_count'] ?? $itemsIdioma->count();
                                 $textoPrincipal = $idiomaData['texto'] ?? '';
                                 $updatedAt = $idiomaData['updated_at'] ?? null;
-                                $fragmentos = $itemsIdioma->take(3);
+                                $fragmentos = $itemsIdioma;
                             @endphp
 
                             <article class="rounded-[2rem] border border-white/5 bg-black/30 p-5 flex flex-col gap-4">
@@ -148,7 +147,7 @@
                                     <span>{{ $updatedAt ? $updatedAt->format('d M, Y - H:i') : 'N/A' }}</span>
                                 </div>
 
-                                @if($modoFila === 'detalle' && $itemsIdioma->count() > 1)
+                                @if($modoFila === 'detalle' && $itemsCount > 1)
                                     <div class="rounded-2xl border border-white/5 bg-zinc-950/50 p-4 space-y-3">
                                         <p class="text-[9px] font-black uppercase tracking-[0.3em] text-zinc-500">Fragmentos recientes</p>
                                         <div class="max-h-60 overflow-y-auto space-y-3 pr-1">
@@ -187,6 +186,14 @@
                 </div>
             @endforelse
         </div>
+
+        @if($resumenes->hasPages())
+            <div class="mt-10 flex justify-center">
+                <div class="rounded-[1.75rem] border border-white/10 bg-zinc-950/60 px-5 py-4 shadow-2xl">
+                    {{ $resumenes->onEachSide(1)->links() }}
+                </div>
+            </div>
+        @endif
     </div>
 </div>
 

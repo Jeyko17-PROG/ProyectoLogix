@@ -24,6 +24,13 @@ class AuthenticatedSessionController extends Controller
      */
     public function store(LoginRequest $request): RedirectResponse
     {
+        $request->session()->forget([
+            'support_chat.messages',
+            'actividad_pin_verified',
+            'activation_code',
+            'pending_plan',
+        ]);
+
         $request->authenticate();
 
         $request->session()->regenerate();

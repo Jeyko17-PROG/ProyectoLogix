@@ -1,4 +1,5 @@
 @extends('layouts.spikia')
+@php use App\Support\SpikiaUrl; @endphp
 
 @section('title', 'Spikia - ' . $sesion->titulo)
 
@@ -6,8 +7,20 @@
 @vite('resources/css/sessions-mobile.css')
 @endpush
 
+@push('head-scripts')
+<script>
+    window.__SPIKIA_MOBILE__ = @json([
+        'streamBaseUrl' => SpikiaUrl::public(route('sesion.transmision', ['slug' => $sesion->slug])),
+    ]);
+</script>
+@vite('resources/js/mobile.js')
+@endpush
+
 @section('content')
 <div class="mobile-container">
+    <div class="mb-4">
+        @include('modules.sessions.partials.demo-banner', ['sesion' => $sesion])
+    </div>
     <div id="view-info" class="card">
         <img src="{{ asset('storage/media/images/spikia-25.png') }}" class="logo" alt="Spikia">
         <h1>{{ $sesion->titulo }}</h1>
@@ -30,9 +43,4 @@
     </div>
 </div>
 
-<script>
-    window.__SPIKIA_MOBILE__ = @json([
-        'streamBaseUrl' => route('sesion.transmision', ['slug' => $sesion->slug]),
-    ]);
-</script>
 @endsection

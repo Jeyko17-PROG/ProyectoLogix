@@ -5,10 +5,10 @@ namespace App\Modules\Activity\Controllers;
 use App\Exports\ActividadExport;
 use App\Http\Controllers\Controller;
 use App\Models\Sesion;
+use App\Models\Transcripcion;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Excel;
-use Illuminate\Support\Str;
+use Maatwebsite\Excel\Facades\Excel;
 
 class ActividadController extends Controller
 {
@@ -41,13 +41,11 @@ class ActividadController extends Controller
         abort_unless($this->hasAccess(), 403);
 
         $q = trim((string) $request->query('q', ''));
-        $sesionesConEstadisticas = $this->buildSesionesConEstadisticas();
+        $sesionesConEstadisticas = $this->buildSesionesConEstadisticas($q, 15);
 
-        if ($q !== '') {
-            $sesionesConEstadisticas = $this->filterSesiones($sesionesConEstadisticas, $q);
-        }
+        $activityTotals = $this->activityTotals($q);
 
-        return view('modules.activity.index', compact('sesionesConEstadisticas', 'q'));
+        return view('modules.activity.index', compact('sesionesConEstadisticas', 'activityTotals', 'q'));
     }
 
     public function exportarExcel(Request $request)
@@ -55,13 +53,9 @@ class ActividadController extends Controller
         abort_unless($this->hasAccess(), 403);
 
         $q = trim((string) $request->query('q', ''));
-        $data = $this->buildSesionesConEstadisticas();
+        $data = $this->buildSesionesConEstadisticas($q, null);
 
-        if ($q !== '') {
-            $data = $this->filterSesiones($data, $q);
-        }
-
-        return Excel::download(new ActividadExport($data), 'log-actividad.xlsx');
+        return Excel::download(new ActividadExport($data), 'archivo-excel-actividad.xlsx');
     }
 
     private function hasAccess(): bool
@@ -73,14 +67,26 @@ class ActividadController extends Controller
             );
     }
 
-    private function buildSesionesConEstadisticas()
+    private function buildSesionesConEstadisticas(string $q = '', ?int $perPage = 15)
     {
-        return Sesion::withCount('transcripciones')
+        $query = Sesion::withCount('transcripciones')
             ->with(['transcripciones' => fn ($query) => $query->latest()->limit(1)])
             ->where('user_id', auth()->id())
-            ->latest()
-            ->get()
-            ->map(function (Sesion $sesion) {
+            ->when($q !== '', function ($query) use ($q) {
+                $like = '%' . str_replace(['\\', '%', '_'], ['\\\\', '\%', '\_'], $q) . '%';
+
+                $query->where(function ($nested) use ($like) {
+                    $nested->where('titulo', 'like', $like)
+                        ->orWhere('slug', 'like', $like)
+                        ->orWhere('fecha_inicio', 'like', $like)
+                        ->orWhere('hora_inicio', 'like', $like)
+                        ->orWhere('hora_fin', 'like', $like)
+                        ->orWhereHas('transcripciones', fn ($transcripciones) => $transcripciones->where('texto', 'like', $like));
+                });
+            })
+            ->latest();
+
+        $mapSession = function (Sesion $sesion) {
                 $inicio = $this->parseDateTime($sesion->fecha_inicio, $sesion->hora_inicio);
                 $fin = $this->parseDateTime($sesion->fecha_inicio, $sesion->hora_fin);
                 $duracionHoras = null;
@@ -96,31 +102,52 @@ class ActividadController extends Controller
                     'fecha' => $sesion->fecha_inicio,
                     'hora_inicio' => $sesion->hora_inicio,
                     'hora_fin' => $sesion->hora_fin,
+                    'idiomas' => collect(is_array($sesion->idiomas) ? $sesion->idiomas : [])
+                        ->filter()
+                        ->values()
+                        ->implode(', '),
                     'presentador' => auth()->user()->name,
                     'transcripciones_count' => (int) $sesion->transcripciones_count,
                     'duracion_horas' => $duracionHoras,
+                    'extra_time_hours' => round(((int) ($sesion->extra_time_minutes ?? 0)) / 60, 2),
+                    'extension_count' => (int) ($sesion->extension_count ?? 0),
+                    'last_extended_at' => $sesion->last_extended_at,
                     'ultimo_texto' => $sesion->transcripciones->first()?->texto,
                 ];
-            });
+        };
+
+        if ($perPage === null) {
+            return $query->get()->map($mapSession);
+        }
+
+        $paginator = $query->paginate($perPage)->withQueryString();
+        $paginator->setCollection($paginator->getCollection()->map($mapSession));
+
+        return $paginator;
     }
 
-    private function filterSesiones($sesiones, string $q)
+    private function activityTotals(string $q = ''): array
     {
-        $needle = Str::lower($q);
+        $query = Sesion::where('user_id', auth()->id())
+            ->when($q !== '', function ($query) use ($q) {
+                $like = '%' . str_replace(['\\', '%', '_'], ['\\\\', '\%', '\_'], $q) . '%';
 
-        return collect($sesiones)->filter(function (array $sesion) use ($needle) {
-            $texto = collect([
-                $sesion['titulo'] ?? '',
-                $sesion['slug'] ?? '',
-                $sesion['presentador'] ?? '',
-                $sesion['fecha'] ?? '',
-                $sesion['hora_inicio'] ?? '',
-                $sesion['hora_fin'] ?? '',
-                $sesion['ultimo_texto'] ?? '',
-            ])->implode(' ');
+                $query->where(function ($nested) use ($like) {
+                    $nested->where('titulo', 'like', $like)
+                        ->orWhere('slug', 'like', $like)
+                        ->orWhere('fecha_inicio', 'like', $like)
+                        ->orWhereHas('transcripciones', fn ($transcripciones) => $transcripciones->where('texto', 'like', $like));
+                });
+            });
 
-            return Str::contains(Str::lower($texto), $needle);
-        })->values();
+        $sessionIds = (clone $query)->pluck('id');
+
+        return [
+            'sesiones' => $sessionIds->count(),
+            'transcripciones' => $sessionIds->isEmpty()
+                ? 0
+                : Transcripcion::whereIn('sesion_id', $sessionIds)->count(),
+        ];
     }
 
     private function parseDateTime($date, $time): ?Carbon

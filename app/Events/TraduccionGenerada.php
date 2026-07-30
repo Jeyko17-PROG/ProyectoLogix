@@ -20,7 +20,7 @@ class TraduccionGenerada implements ShouldBroadcast
     {
         $this->slug = $slug;
         $this->texto = $texto;
-        $this->traduccion = $traduccion;
+        $this->traduccion = $traduccion; 
     }
 
     public function broadcastOn()

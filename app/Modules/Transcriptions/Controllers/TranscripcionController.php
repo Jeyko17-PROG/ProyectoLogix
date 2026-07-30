@@ -5,9 +5,10 @@ namespace App\Modules\Transcriptions\Controllers;
 use App\Events\TranscripcionCreada;
 use App\Http\Controllers\Controller;
 use App\Models\Sesion;
+use App\Models\SessionUsageEvent;
 use App\Models\Transcripcion;
+use App\Services\TranscriptionHistoryService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
@@ -22,95 +23,11 @@ class TranscripcionController extends Controller
         return view('modules.transcriptions.index', compact('sesion'));
     }
 
-    public function listado(Request $request)
+    public function listado(Request $request, TranscriptionHistoryService $transcriptionHistoryService)
     {
         $modo = $request->query('modo');
         $q = trim((string) $request->query('q', ''));
-
-        $transcripciones = Transcripcion::query()
-            ->with('sesion')
-            ->whereHas('sesion', fn ($query) => $query->where('user_id', auth()->id()))
-            ->latest()
-            ->get();
-
-        $resumenes = $transcripciones
-            ->groupBy('slug')
-            ->map(function (Collection $grupo) {
-                $sesion = $grupo->first()?->sesion;
-                $idiomas = $grupo
-                    ->groupBy('idioma')
-                    ->map(function (Collection $items, $idioma) {
-                        $itemsOrdenados = $items->sortBy('created_at')->values();
-                        $ultimo = $itemsOrdenados->last();
-
-                        return [
-                            'idioma' => $idioma,
-                            'modo' => $itemsOrdenados->first()?->modo ?? 'resumen',
-                            'items' => $itemsOrdenados,
-                            'texto' => $ultimo?->texto ?? '',
-                            'updated_at' => $ultimo?->updated_at,
-                        ];
-                    })
-                    ->values();
-
-                return [
-                    'sesion' => $sesion,
-                    'slug' => $grupo->first()?->slug,
-                    'transcripciones_count' => $grupo->count(),
-                    'idiomas' => $idiomas,
-                ];
-            })
-            ->values();
-
-        if ($modo === 'resumen') {
-            $resumenes = $resumenes->map(function (array $resumen) {
-                $resumen['idiomas'] = $resumen['idiomas']
-                    ->filter(fn ($idioma) => ($idioma['modo'] ?? 'resumen') === 'resumen')
-                    ->values();
-
-                return $resumen;
-            })->filter(fn (array $resumen) => $resumen['idiomas']->isNotEmpty())->values();
-        }
-
-        if ($modo === 'detalle') {
-            $resumenes = $resumenes->map(function (array $resumen) {
-                $resumen['idiomas'] = $resumen['idiomas']
-                    ->filter(fn ($idioma) => ($idioma['modo'] ?? 'resumen') === 'detalle')
-                    ->values();
-
-                return $resumen;
-            })->filter(fn (array $resumen) => $resumen['idiomas']->isNotEmpty())->values();
-        }
-
-        if ($q !== '') {
-            $needle = Str::lower($q);
-
-            $resumenes = $resumenes->map(function (array $resumen) use ($needle) {
-                $sesion = $resumen['sesion'];
-                $slug = (string) ($resumen['slug'] ?? '');
-
-                $matchesSession = Str::contains(Str::lower((string) ($sesion?->titulo ?? '')), $needle)
-                    || Str::contains(Str::lower($slug), $needle)
-                    || Str::contains(Str::lower((string) ($sesion?->slug ?? '')), $needle);
-
-                $resumen['idiomas'] = $resumen['idiomas']->map(function (array $idioma) use ($needle) {
-                    $items = $idioma['items']->filter(function ($item) use ($needle) {
-                        return Str::contains(Str::lower((string) $item->texto), $needle)
-                            || Str::contains(Str::lower((string) $item->idioma), $needle);
-                    })->values();
-
-                    $idioma['items'] = $items;
-                    $idioma['texto'] = $items->last()?->texto ?? '';
-                    $idioma['updated_at'] = $items->last()?->updated_at;
-
-                    return $idioma;
-                })->filter(fn (array $idioma) => $idioma['items']->isNotEmpty())->values();
-
-                $resumen['matches_search'] = $matchesSession || $resumen['idiomas']->isNotEmpty();
-
-                return $resumen;
-            })->filter(fn (array $resumen) => ($resumen['matches_search'] ?? false))->values();
-        }
+        $resumenes = $transcriptionHistoryService->paginateForUser($request->user(), $modo, $q, 20);
 
         return view('modules.transcriptions.listado', compact('resumenes', 'modo', 'q'));
     }
@@ -133,6 +50,8 @@ class TranscripcionController extends Controller
             'audio_url' => $request->input('audio_url'),
             'modo' => $request->input('modo', 'resumen'),
         ]);
+
+        $this->recordActivity($transcripcion, 'transcription_saved');
 
         broadcast(new TranscripcionCreada($transcripcion, $request->slug))->toOthers();
 
@@ -165,6 +84,19 @@ class TranscripcionController extends Controller
 
         $sesion->grabacion_url = $url;
         $sesion->save();
+
+        SessionUsageEvent::create([
+            'user_id' => $sesion->user_id,
+            'sesion_id' => $sesion->id,
+            'slug' => $sesion->slug,
+            'action' => 'recording_saved',
+            'metadata' => [
+                'audio_url' => $url,
+                'storage_path' => $path,
+                'occurred_at' => now()->toIso8601String(),
+            ],
+            'occurred_at' => now(),
+        ]);
 
         return response()->json([
             'success' => true,
@@ -204,6 +136,69 @@ class TranscripcionController extends Controller
             abort(404, 'No hay audio disponible.');
         }
 
-        return redirect($audioUrl);
+        $diskPath = $this->resolvePublicDiskPath($audioUrl);
+
+        if ($diskPath && Storage::disk('public')->exists($diskPath)) {
+            return Storage::disk('public')->download($diskPath, basename($diskPath));
+        }
+
+        if (Str::startsWith($audioUrl, ['http://', 'https://'])) {
+            return redirect()->away($audioUrl);
+        }
+
+        abort(404, 'El archivo de audio no existe en storage.');
+    }
+
+    private function resolvePublicDiskPath(string $url): ?string
+    {
+        $path = parse_url($url, PHP_URL_PATH) ?: $url;
+        $path = str_replace('\\', '/', trim((string) $path));
+        $path = preg_replace('#^https?://[^/]+#', '', $path);
+        $path = ltrim($path, '/');
+
+        foreach (['storage/', 'public/', '/storage/', '/public/'] as $prefix) {
+            $path = Str::startsWith($path, ltrim($prefix, '/'))
+                ? Str::after($path, ltrim($prefix, '/'))
+                : $path;
+        }
+
+        if (Str::startsWith($path, 'media/')) {
+            return $path;
+        }
+
+        if (Str::startsWith($path, 'traducciones/')) {
+            return $path;
+        }
+
+        if (Str::startsWith($path, 'transmisiones/')) {
+            return 'media/' . $path;
+        }
+
+        return $path !== '' ? $path : null;
+    }
+
+    private function recordActivity(Transcripcion $transcripcion, string $action): void
+    {
+        $sesion = $transcripcion->sesion;
+
+        if (! $sesion) {
+            return;
+        }
+
+        SessionUsageEvent::create([
+            'user_id' => $transcripcion->user_id ?: $sesion->user_id,
+            'sesion_id' => $sesion->id,
+            'slug' => $sesion->slug,
+            'action' => $action,
+            'metadata' => [
+                'transcripcion_id' => $transcripcion->id,
+                'idioma' => $transcripcion->idioma,
+                'modo' => $transcripcion->modo,
+                'texto' => Str::limit((string) $transcripcion->texto, 500),
+                'audio_url' => $transcripcion->audio_url,
+                'occurred_at' => now()->toIso8601String(),
+            ],
+            'occurred_at' => now(),
+        ]);
     }
 }

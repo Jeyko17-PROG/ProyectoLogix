@@ -2,7 +2,10 @@
 
 return [
 
-    'default' => env('BROADCAST_CONNECTION', 'log'),
+    // env('BROADCAST_CONNECTION') devuelve PHP-null cuando el valor es "null",
+    // asi que lo normalizamos a la conexion 'null' (driver no-op) para no romper
+    // el resolver ni generar deprecations.
+    'default' => env('BROADCAST_CONNECTION', 'log') ?: 'null',
 
     'connections' => [
 

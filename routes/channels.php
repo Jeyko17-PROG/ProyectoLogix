@@ -25,6 +25,6 @@ use Illuminate\Support\Facades\Broadcast;
 |
 */
 
-Broadcast::channel('transmision.{slug}', function ($user = null, $slug) {
+Broadcast::channel('transmision.{slug}', function ($user, $slug) {
     return true; // Permite acceso público
 });

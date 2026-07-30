@@ -2,286 +2,317 @@
 
 @section('title', 'Dashboard | Spikia')
 
+@push('styles')
+    @vite('resources/css/dashboard.css')
+@endpush
+
+@push('head-scripts')
+    @vite('resources/js/dashboard.js')
+@endpush
+
 @section('content')
+@php
+    // MONEDA REALISTA, GRANDE Y CON SALTO (INTACTA)
+    $coinIcon = <<<'SVG'
+<svg viewBox="0 0 64 64" fill="none" aria-hidden="true" class="h-12 w-12 animate-bounce">
+    <defs>
+        <radialGradient id="coinGlow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(22 20) rotate(45) scale(40 40)">
+            <stop offset="0" stop-color="#fff3bf"></stop>
+            <stop offset="0.45" stop-color="#f8c94d"></stop>
+            <stop offset="1" stop-color="#d67f00"></stop>
+        </radialGradient>
+        <linearGradient id="coinEdge" x1="16" y1="16" x2="48" y2="48" gradientUnits="userSpaceOnUse">
+            <stop stop-color="#fff0a8"></stop>
+            <stop offset="1" stop-color="#8b4e00"></stop>
+        </linearGradient>
+    </defs>
+    <circle cx="32" cy="32" r="24" fill="url(#coinGlow)" stroke="url(#coinEdge)" stroke-width="4"></circle>
+    <circle cx="32" cy="32" r="16" fill="rgba(255,255,255,0.12)" stroke="#ffd86b" stroke-opacity="0.55" stroke-width="2"></circle>
+    <path d="M28 29h8c3.8 0 7 3.1 7 7s-3.2 7-7 7h-1.5l2.8 5h-5l-2.2-5H28l1.8-4H36c1.6 0 3-1.4 3-3s-1.4-3-3-3h-8l-1.8-4Z" fill="rgba(122,67,0,0.9)"></path>
+</svg>
+SVG;
 
-<div class="flex min-h-screen text-white font-sans selection:bg-neonBlue/30">
+    $dashboardConfig = [
+        'metricsUrl' => route('dashboard.metrics'),
+        'sessionsChart' => $sessionsChart ?? [],
+        'brandLogo' => asset('storage/media/images/spikia-25.png'),
+    ];
+@endphp
 
-    <aside class="w-64 bg-zinc-950 border-r border-white/10 px-5 py-6 flex flex-col sticky top-0 h-screen overflow-y-auto">
-        <div class="flex items-center justify-center px-2 w-full">
-            <img src="{{ asset('storage/media/images/spikia-25.png') }}" class="h-24 w-auto object-contain" alt="Spikia">
+<audio id="marioDeathSound" src="https://www.myinstants.com/media/sounds/mario-dies.mp3" preload="auto"></audio>
+
+<div id="dashboard-config" data-config="{{ json_encode($dashboardConfig) }}" class="hidden"></div>
+
+<div class="flex min-h-screen text-white bg-zinc-900">
+    
+    <aside id="sidebar" class="fixed left-0 top-0 z-50 h-screen w-72 -translate-x-full overflow-y-auto border-r border-white/10 bg-zinc-950 px-5 py-6 shadow-2xl transition-transform duration-300">
+        <div class="mb-6 flex justify-center">
+            <img src="{{ asset('storage/media/images/spikia-25.png') }}" class="h-20 w-auto object-contain" alt="Spikia">
         </div>
-
-        <div class="mt-10">
-            <div class="mb-4 px-1">
-                <h2 class="text-xs font-bold uppercase tracking-[0.3em] text-zinc-500">Navegación</h2>
-            </div>
-
-            <button
-                id="menuToggle"
-                type="button"
-                class="w-full flex items-center justify-between px-4 py-3 rounded-2xl bg-white/5 border border-white/10 text-white hover:bg-white/10 transition-all duration-200"
-                aria-expanded="false"
-                aria-controls="menuPanel"
-            >
-                <span class="text-base font-semibold tracking-wide">Menú</span>
-                <span id="menuChevron" class="text-zinc-400 text-lg transition-transform duration-200">v</span>
-            </button>
-
-            <div id="menuPanel" class="mt-3 overflow-hidden rounded-[1.5rem] border border-white/10 bg-zinc-900/95 p-3 shadow-[0_20px_80px_rgba(0,0,0,0.45)] backdrop-blur-xl transition-all duration-300 ease-out max-h-0 opacity-0 translate-y-2 scale-[0.98] pointer-events-none">
-                <div class="space-y-2">
-                    <a href="{{ route('dashboard') }}" class="flex items-center justify-between px-4 py-3 rounded-2xl border transition-all duration-200 {{ request()->routeIs('dashboard') ? 'bg-white/10 text-white border-white/15' : 'bg-white/0 text-zinc-300 border-transparent hover:bg-white/5 hover:text-white hover:border-white/10' }}">
-                        <span class="font-semibold text-[15px] tracking-wide">Portada</span>
-                        <span class="text-zinc-500">></span>
-                    </a>
-
-                    <a href="{{ route('sesiones.index') }}" class="flex items-center justify-between px-4 py-3 rounded-2xl border transition-all duration-200 {{ request()->routeIs('sesiones.*') ? 'bg-white/10 text-white border-white/15' : 'bg-white/0 text-zinc-300 border-transparent hover:bg-white/5 hover:text-white hover:border-white/10' }}">
-                        <span class="font-semibold text-[15px] tracking-wide">Sesiones</span>
-                        <span class="text-zinc-500">></span>
-                    </a>
-
-                    @if(auth()->check() && auth()->user()->email === 'luisgarciab193@gmail.com')
-                    <a href="{{ route('actividad.index') }}" class="flex items-center justify-between px-4 py-3 rounded-2xl border transition-all duration-200 {{ request()->routeIs('actividad.*') ? 'bg-white/10 text-white border-white/15' : 'bg-white/0 text-zinc-300 border-transparent hover:bg-white/5 hover:text-white hover:border-white/10' }}">
-                        <span class="font-semibold text-[15px] tracking-wide">Log</span>
-                        <span class="text-zinc-500">></span>
-                    </a>
-                    @endif
-
-                    <a href="{{ route('transcripciones.listado') }}" class="flex items-center justify-between px-4 py-3 rounded-2xl border transition-all duration-200 {{ request()->routeIs('transcripciones.*') ? 'bg-white/10 text-white border-white/15' : 'bg-white/0 text-zinc-300 border-transparent hover:bg-white/5 hover:text-white hover:border-white/10' }}">
-                        <span class="font-semibold text-[15px] tracking-wide">Transcripciones</span>
-                        <span class="text-zinc-500">></span>
-                    </a>
-
-                    <a href="{{ route('glosarios') }}" class="flex items-center justify-between px-4 py-3 rounded-2xl border transition-all duration-200 {{ request()->routeIs('glosarios') ? 'bg-white/10 text-white border-white/15' : 'bg-white/0 text-zinc-300 border-transparent hover:bg-white/5 hover:text-white hover:border-white/10' }}">
-                        <span class="font-semibold text-[15px] tracking-wide">Glosarios</span>
-                        <span class="text-zinc-500">></span>
-                    </a>
-                </div>
-
-                <div class="pt-4 mt-4 border-t border-white/5 space-y-2">
-                    <a href="{{ route('soporte') }}" class="flex items-center justify-between px-4 py-3 rounded-2xl transition-all duration-200 text-zinc-300 bg-white/5 border border-white/10 hover:bg-white/10 hover:text-white hover:border-white/15">
-                        <span class="font-semibold text-[15px] tracking-wide">Soporte</span>
-                        <span class="text-zinc-500">></span>
-                    </a>
-
-                    <form method="POST" action="{{ route('logout') }}">
-                        @csrf
-                        <button type="submit" class="w-full flex items-center justify-between px-4 py-3 rounded-2xl transition-all duration-200 text-red-200 bg-red-500/10 border border-red-500/20 hover:bg-red-500/20 hover:border-red-500/40 hover:text-white">
-                            <span class="font-semibold text-[15px] tracking-wide">Cerrar sesión</span>
-                            <span class="text-red-300">></span>
-                        </button>
-                    </form>
-                </div>
-            </div>
+        <div class="mb-4 px-2">
+            <h2 class="text-xs font-bold uppercase tracking-widest text-zinc-500">Navegacion</h2>
+        </div>
+        <div class="space-y-2">
+            <a href="{{ route('dashboard') }}" class="flex justify-between rounded-xl px-4 py-3 {{ request()->routeIs('dashboard') ? 'bg-white/10 text-white' : 'text-zinc-400 hover:bg-white/5 hover:text-white' }}">
+                <span>Portada</span><span>›</span>
+            </a>
+            <a href="{{ route('sesiones.index') }}" class="flex justify-between rounded-xl px-4 py-3 {{ request()->routeIs('sesiones.*') ? 'bg-white/10 text-white' : 'text-zinc-400 hover:bg-white/5 hover:text-white' }}">
+                <span>Sesiones</span><span>›</span>
+            </a>
+            <a href="{{ route('glosarios') }}" class="flex justify-between rounded-xl px-4 py-3 {{ request()->routeIs('glosarios*') ? 'bg-white/10 text-white' : 'text-zinc-400 hover:bg-white/5 hover:text-white' }}">
+                <span>Glosario</span><span>›</span>
+            </a>
+            @if(auth()->user()->email === 'luisgarciab193@gmail.com')
+                <a href="{{ route('actividad.index') }}" class="flex justify-between rounded-xl px-4 py-3 {{ request()->routeIs('actividad.*') ? 'bg-white/10 text-white' : 'text-zinc-400 hover:bg-white/5 hover:text-white' }}">
+                    <span>Actividad</span><span>›</span>
+                </a>
+            @endif
+            <a href="{{ route('transcripciones.listado') }}" class="flex justify-between rounded-xl px-4 py-3 {{ request()->routeIs('transcripciones.*') ? 'bg-white/10 text-white' : 'text-zinc-400 hover:bg-white/5 hover:text-white' }}">
+                <span>Transcripciones</span><span>›</span>
+            </a>
+        </div>
+        <div class="my-5 border-t border-white/10"></div>
+        <div class="space-y-2">
+            <a href="{{ route('soporte') }}" class="flex justify-between rounded-xl px-4 py-3 text-zinc-400 hover:bg-white/5 hover:text-white">
+                <span>Soporte</span><span>›</span>
+            </a>
+            <form method="POST" id="logout-form" action="{{ route('logout') }}">
+                @csrf
+                <button type="submit" class="flex w-full justify-between rounded-xl px-4 py-3 text-red-400 hover:bg-red-500/10 transition-colors">
+                    <span>Cerrar sesion</span><span>›</span>
+                </button>
+            </form>
         </div>
     </aside>
 
-    <main class="flex-1 bg-zinc-900 overflow-y-auto">
-        
-        <div class="flex items-center justify-between px-8 pt-8 pb-4">
-            <div>
-                <h1 class="text-2xl font-bold tracking-tight">Panel de Control</h1>
-                <p class="text-zinc-500 text-sm">Bienvenido de vuelta, {{ explode(' ', auth()->user()->name)[0] }}</p>
-            </div>
+    <div id="overlay" class="fixed inset-0 z-40 hidden bg-black/50 backdrop-blur-sm"></div>
 
-            <div class="flex items-center gap-6">
-                <div class="flex items-center gap-2 px-3 py-2 rounded-full border border-white/10 bg-zinc-800/50 text-zinc-300">
-                    <span class="text-xs font-semibold uppercase tracking-[0.25em]">Créditos</span>
-                    @if(($creditStats['half_alert'] ?? false))
-                        <span class="w-2.5 h-2.5 bg-red-500 rounded-full"></span>
-                    @endif
+    <main class="min-h-screen flex-1 min-w-0">
+        <div class="header-container flex flex-col gap-4 px-4 py-6 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-8">
+            <div class="flex items-center gap-4">
+                <button id="hamburgerBtn" class="rounded-lg px-3 py-2 text-3xl text-white hover:bg-white/10 transition-colors">☰</button>
+                <div class="flex items-center gap-4">
+                    <img src="{{ asset('storage/media/images/spikia-25.png') }}" class="h-12 w-12 rounded-2xl border border-white/10 bg-black/30 object-contain shadow-lg" alt="Spikia">
+                    <div>
+                        <h1 class="text-2xl font-bold leading-none">Panel de control</h1>
+                        <p class="text-sm text-zinc-400 mt-1">Bienvenido {{ explode(' ', auth()->user()->name)[0] }}</p>
+                    </div>
                 </div>
-
-                <div class="flex items-center gap-3 bg-zinc-800/50 p-1.5 pr-4 rounded-full border border-white/5">
-                    <div class="w-8 h-8 rounded-full bg-gradient-to-tr from-spikiaPurple to-neonBlue flex items-center justify-center font-bold text-xs">
+            </div>
+            <div class="flex flex-wrap items-center gap-4 lg:gap-8">
+                <div id="creditsBadge" class="flex items-center gap-4">
+                    {!! $coinIcon !!}
+                    <div>
+                        <p class="text-[10px] uppercase tracking-widest text-zinc-500 leading-none mb-1">Creditos</p>
+                        <p class="text-xl font-black {{ auth()->user()->hasUnlimitedCredits() ? 'text-emerald-400' : 'text-white' }}">
+                            {{ auth()->user()->hasUnlimitedCredits() ? 'Ilimitados' : ($creditStats['remaining'] ?? 0) }}
+                        </p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-3 rounded-full bg-zinc-800/50 p-1.5 pr-4 border border-white/5">
+                    <div class="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-tr from-purple-500 to-blue-400 text-xs font-bold">
                         {{ strtoupper(substr(auth()->user()->name, 0, 1)) }}
                     </div>
-                    <span class="text-sm font-medium">{{ auth()->user()->name }}</span>
+                    <span class="text-sm font-medium hidden sm:inline">{{ auth()->user()->name }}</span>
                 </div>
             </div>
         </div>
 
-        <div class="p-8 max-w-7xl mx-auto">
-            
-            <div class="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-12">
-                <div class="lg:col-span-3 bg-gradient-to-br from-zinc-800 to-zinc-900 border border-white/10 rounded-[2.5rem] p-10 relative overflow-hidden group">
-                    <div class="relative z-10">
-                        <span class="bg-spikiaPurple/20 text-spikiaPurple px-4 py-1 rounded-full text-xs font-bold tracking-widest uppercase mb-4 inline-block border border-spikiaPurple/30">
-                            Status: Online
-                        </span>
-                        <h2 class="text-4xl font-extrabold mb-4 leading-tight">
-                            Potencia tu voz con <br> <span class="text-transparent bg-clip-text bg-gradient-to-r from-neonBlue to-spikiaPurple">Inteligencia Artificial</span>
-                        </h2>
-                        <p class="text-zinc-400 max-w-md mb-8 leading-relaxed">Todas tus herramientas de transcripción y análisis listas para el siguiente nivel.</p>
-                    </div>
-                    <div class="absolute -right-20 -top-20 w-80 h-80 bg-spikiaPurple/10 rounded-full blur-[100px] group-hover:bg-spikiaPurple/20 transition-all duration-700"></div>
-                </div>
-
-                <div class="bg-zinc-950 border border-white/10 rounded-[2.5rem] p-8 flex flex-col justify-center relative overflow-hidden">
-                    <p class="text-zinc-500 text-sm font-medium mb-1">Créditos de uso</p>
-                    <h3 class="text-3xl font-bold mb-3">{{ ($creditStats['unlimited'] ?? false) ? 'Ilimitados' : 'Plan 100' }}</h3>
-                    <p class="text-xs uppercase tracking-[0.3em] text-zinc-500 mb-6">
-                        @if(($creditStats['unlimited'] ?? false))
-                            Cuenta ilimitada
-                        @else
-                            {{ $creditStats['used'] ?? 0 }}/{{ $creditStats['limit'] ?? 100 }} usados
-                        @endif
-                    </p>
-
-                    <div class="space-y-4">
-                        @if(($creditStats['unlimited'] ?? false))
-                            <div class="px-4 py-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-200 text-xs font-semibold">
-                                Cuenta ilimitada activa para este usuario.
-                            </div>
-                        @else
-                            <div class="flex justify-between text-xs font-bold uppercase tracking-wider">
-                                <span class="text-zinc-400">Progreso</span>
-                                <span class="text-neonBlue">{{ $creditStats['percent'] ?? 0 }}%</span>
-                            </div>
-                            <div class="w-full h-2 bg-zinc-800 rounded-full overflow-hidden">
-                                <div class="h-full bg-gradient-to-r from-neonBlue to-spikiaPurple rounded-full" style="width:{{ $creditStats['percent'] ?? 0 }}%"></div>
-                            </div>
-                            <p class="text-xs text-zinc-500 italic">Restan {{ $creditStats['remaining'] ?? 0 }} créditos</p>
-                            @if(($creditStats['half_alert'] ?? false))
-                                <div class="px-4 py-3 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-300 text-xs font-semibold">
-                                    Aviso: ya se consumio la mitad del plan.
-                                </div>
-                            @endif
-                        @endif
-                    </div>
-                </div>
-            </div>
-
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-16 h-[400px]">
-                <div class="md:row-span-2 rounded-3xl overflow-hidden group border border-white/5">
-                    <img src="https://images.unsplash.com/photo-1590602847861-f357a9332bbc?auto=format&fit=crop&q=80" 
-                        class="w-full h-full object-cover grayscale hover:grayscale-0 transition-all duration-700 scale-105 group-hover:scale-100">
-                </div>
-                <div class="md:col-span-2 rounded-3xl overflow-hidden group border border-white/5">
-                <img src="https://images.unsplash.com/photo-1589903308914-12911a670564?auto=format&fit=crop&q=80" 
-                    class="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-all duration-700">
-                </div>
-                <div class="rounded-3xl overflow-hidden group border border-white/5 bg-spikiaPurple/20 flex items-center justify-center">
-                <span class="text-4xl group-hover:scale-125 transition-transform duration-500">✦</span>
-                </div>
-                <div class="rounded-3xl overflow-hidden group border border-white/5">
-                <img src="https://images.unsplash.com/photo-1557804506-669a67965ba0?auto=format&fit=crop&q=80" 
-                class="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-500">
-                </div>
-            </div>
-
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-10 border-t border-white/5 pt-16">
-                
+        <div class="grid grid-cols-1 gap-6 px-4 pb-8 sm:px-6 md:grid-cols-2 lg:grid-cols-3 lg:px-8">
+            <section class="card-item rounded-3xl border border-white/5 bg-zinc-800/50 p-6 flex flex-col justify-between min-h-[160px]">
                 <div>
-                    <h2 class="text-2xl font-bold mb-2 text-white">Multimedia</h2>
-                    <p class="text-zinc-500 text-sm mb-8">Sube contenido para mostrar en tu portada pública.</p>
-                    
-                    <form action="{{ route('videos.store') }}" method="POST" enctype="multipart/form-data" class="space-y-4">
-                        @csrf
-                        <div class="space-y-1">
-                            <label class="text-xs font-bold text-zinc-400 uppercase ml-2">Título</label>
-                            <input type="text" name="title" placeholder="Ej: Nueva campaña 2024" required
-                            class="w-full p-4 rounded-2xl bg-zinc-950 border border-white/10 focus:border-spikiaPurple outline-none transition text-sm">
-                        </div>
-
-                        <div class="p-4 rounded-2xl border-2 border-dashed border-white/10 hover:border-spikiaPurple/50 transition bg-zinc-950/50">
-                            <p class="text-center text-xs text-zinc-500 mb-2">JPG, PNG o MP4</p>
-                            <input type="file" name="image" class="text-xs text-zinc-400 w-full file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-spikiaPurple file:text-white hover:file:bg-neonBlue">
-                        </div>
-
-                        <button type="submit"
-                                class="w-full py-4 bg-white text-black font-bold rounded-2xl hover:bg-neonBlue hover:text-white transition-all duration-300 shadow-xl shadow-white/5">
-                            Publicar Contenido
-                        </button>
-                    </form>
+                    <div class="flex justify-between items-start mb-2">
+                        <h3 class="font-bold text-lg text-zinc-100">Tu Plan</h3>
+                        <span class="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[9px] font-black uppercase tracking-widest text-zinc-300">
+                            {{ strtoupper($currentPlan) }}
+                        </span>
+                    </div>
+                    <p class="text-sm text-zinc-400 leading-tight">Activa tu licencia para obtener más tokens.</p>
                 </div>
+                <button type="button" id="openLicenseModal" class="mt-4 w-fit rounded-xl bg-blue-600 px-6 py-2.5 text-xs font-bold hover:bg-blue-500 transition-all">
+                    Activar tu licencia
+                </button>
+            </section>
 
-                <div class="lg:col-span-2">
-                    @if($videos->count() > 0)
-                        <div class="relative rounded-[2rem] overflow-hidden shadow-2xl border border-white/10 bg-black group">
-                            <div id="slider" class="flex transition-transform duration-[800ms] cubic-bezier(0.4, 0, 0.2, 1)">
-                                @foreach($videos as $video)
-                                    <div class="min-w-full relative h-[450px]">
-                                        @if($video->path)
-                                            <video autoplay muted loop class="w-full h-full object-cover">
-                                                <source src="{{ asset('storage/' . $video->path) }}">
-                                            </video>
-                                        @elseif($video->image)
-                                            <img src="{{ asset('storage/' . $video->image) }}" class="w-full h-full object-cover">
-                                        @endif
-
-                                        <div class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent flex flex-col justify-end p-10">
-                                            <h3 class="text-3xl font-bold text-white mb-4">{{ $video->title }}</h3>
-                                            
-                                            <form action="{{ route('videos.destroy', $video->id) }}" method="POST">
-                                                @csrf @method('DELETE')
-                                                <button class="px-5 py-2 bg-red-500/10 text-red-500 border border-red-500/20 rounded-lg text-xs font-bold hover:bg-red-500 hover:text-white transition">
-                                                    ELIMINAR ENTRADA
-                                                </button>
-                                            </form>
-                                        </div>
-                                    </div>
-                                @endforeach
-                            </div>
-                            
-                            <div class="absolute bottom-6 right-10 flex gap-2">
-                                @foreach($videos as $index => $v)
-                                    <div class="w-8 h-1 bg-white/20 rounded-full overflow-hidden">
-                                        <div class="h-full bg-white transition-all duration-300" style="width: 0%"></div>
-                                    </div>
-                                @endforeach
-                            </div>
-                        </div>
-                    @else
-                        <div class="h-[450px] border-2 border-dashed border-white/5 rounded-[2rem] flex flex-center flex-col items-center justify-center text-zinc-600">
-                            <span class="text-5xl mb-4">🖼️</span>
-                            <p>No hay contenido en el carrusel aún.</p>
-                        </div>
-                    @endif
+            <section class="card-item rounded-3xl border border-white/5 bg-zinc-800/50 p-6 flex flex-col min-h-[160px]">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="font-bold text-lg text-zinc-100">Uso reciente</h3>
+                    <span class="text-[9px] font-bold text-zinc-500 uppercase tracking-widest">Estadísticas</span>
                 </div>
-            </div>
+                <div class="flex-1 rounded-2xl bg-black/20 p-4 border border-white/5">
+                    <div id="dashboardSessionsChart" class="flex h-28 items-end gap-2">
+                        @foreach($sessionsChart as $month)
+                            @php
+                                $maxCount = max(1, collect($sessionsChart)->max('count') ?? 1);
+                                $barHeight = max(14, min(100, (int) ((($month['count'] ?? 0) / $maxCount) * 100)));
+                            @endphp
+                            <div class="flex-1 flex flex-col items-center gap-1">
+                                <span data-month-count="{{ $month['key'] }}" class="text-[10px] font-black text-white">{{ $month['count'] ?? 0 }}</span>
+                                <div data-month-bar="{{ $month['key'] }}" class="w-full bg-blue-500 rounded-t-sm transition-all duration-500 shadow-[0_0_16px_rgba(59,130,246,0.35)]" style="height: {{ $barHeight }}%"></div>
+                                <span class="text-[8px] text-zinc-600 font-bold uppercase">{{ $month['label'] }}</span>
+                            </div>
+                        @endforeach
+                    </div>
+                    <p id="dashboardSessionsMeta" class="mt-3 text-[9px] font-bold uppercase tracking-[0.25em] text-zinc-500">
+                        {{ collect($sessionsChart)->sum('count') }} usos en 6 meses
+                    </p>
+                </div>
+            </section>
 
+            <section class="card-item rounded-3xl border border-white/5 bg-zinc-800/50 p-6 flex flex-col justify-between min-h-[160px]">
+                <div>
+                    <h3 class="font-bold text-lg text-zinc-100">Demo rápida</h3>
+                    <p class="mt-2 text-sm text-zinc-400">Prueba gratuita por <b>20 minutos</b>. El conteo empieza al activar la demo aunque no uses el microfono.</p>
+                </div>
+                <form id="demoForm" method="POST" action="{{ route('dashboard.demo.activate') }}">
+                    @csrf
+                    <button type="submit" class="mt-4 w-fit rounded-xl bg-zinc-700 px-6 py-2.5 text-xs font-bold hover:bg-zinc-600 transition-all">
+                        Activar demo
+                    </button>
+                </form>
+            </section>
         </div>
     </main>
 </div>
 
+<div id="licenseModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/80 px-4 py-8 backdrop-blur-sm">
+    <div class="absolute inset-0" data-close-license-modal onclick="closeAndReset()"></div>
+    <div class="relative w-full max-w-2xl overflow-hidden rounded-[2.5rem] border border-white/10 bg-zinc-900 shadow-2xl p-8">
+        <h2 class="text-2xl font-black italic uppercase mb-6">Activar Licencia</h2>
+        <form id="licenseForm" method="POST" action="{{ route('dashboard.license.activate') }}" class="space-y-6">
+            @csrf
+            <div id="plansGrid" class="grid gap-3">
+                @foreach($licensePlans as $key => $plan)
+                    <label class="cursor-pointer rounded-2xl border px-5 py-4 border-white/10 bg-white/5 hover:border-white/20 transition-all">
+                        <div class="flex items-center gap-3">
+                            <input type="radio" name="plan" value="{{ $key }}" class="accent-blue-400" onchange="handlePlanSelection('{{ $key }}')">
+                            <div>
+                                <p class="font-bold text-zinc-100">{{ $plan['label'] }}</p>
+                                <p class="text-[10px] text-blue-400 font-black uppercase">{{ $plan['credits'] }} TOKENS</p>
+                            </div>
+                        </div>
+                    </label>
+                @endforeach
+            </div>
+
+            <div id="dynamicContent" class="hidden rounded-2xl bg-black/30 p-6 border border-white/5"></div>
+
+            <div class="flex justify-end gap-3 mt-4">
+                <button type="button" class="text-zinc-500 text-sm" onclick="closeAndReset()">Cancelar</button>
+                <button type="button" id="confirmLicenseBtn" onclick="validateStep()" disabled class="rounded-xl bg-blue-600 px-8 py-2 font-bold text-sm">Siguiente</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <script>
-    document.addEventListener('DOMContentLoaded', () => {
-        const menuToggle = document.getElementById('menuToggle');
-        const menuPanel = document.getElementById('menuPanel');
-        const menuChevron = document.getElementById('menuChevron');
+    let currentStep = 1;
+    let lastRequestTime = {}; 
+    let stepTimer = null;
+    let timeLeft = 10;
+    let reselectionCount = 0; // CONTADOR DE REINTENTOS
 
-        if (menuToggle && menuPanel && menuChevron) {
-            menuToggle.addEventListener('click', () => {
-                const isOpen = menuPanel.classList.contains('max-h-[900px]');
+    function closeAndReset() {
+        const modal = document.getElementById('licenseModal');
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+        clearInterval(stepTimer);
+        // Al cancelar, sumamos al contador para la próxima vez
+        reselectionCount++;
+    }
 
-                if (isOpen) {
-                    menuPanel.classList.remove('max-h-[900px]', 'opacity-100', 'translate-y-0', 'scale-100', 'pointer-events-auto');
-                    menuPanel.classList.add('max-h-0', 'opacity-0', 'translate-y-2', 'scale-[0.98]', 'pointer-events-none');
-                    menuChevron.style.transform = 'rotate(0deg)';
-                    menuToggle.setAttribute('aria-expanded', 'false');
-                    return;
-                }
+    function handlePlanSelection(plan) {
+        currentStep = 1;
+        clearInterval(stepTimer);
+        const dynamicContent = document.getElementById('dynamicContent');
+        const confirmBtn = document.getElementById('confirmLicenseBtn');
+        const mario = document.getElementById('marioDeathSound');
 
-                menuPanel.classList.remove('max-h-0', 'opacity-0', 'translate-y-2', 'scale-[0.98]', 'pointer-events-none');
-                menuPanel.classList.add('max-h-[900px]', 'opacity-100', 'translate-y-0', 'scale-100', 'pointer-events-auto');
-                menuChevron.style.transform = 'rotate(180deg)';
-                menuToggle.setAttribute('aria-expanded', 'true');
-            });
+        // SI ES LA SEGUNDA VEZ QUE ELIGEN (O MÁS) Y NO LLEGÓ EL CÓDIGO
+        if (reselectionCount >= 2 && plan !== 'free') {
+            mario.play();
         }
 
-        const slider = document.getElementById('slider');
-        if (slider && slider.children.length > 1) {
-            let index = 0;
-            const total = slider.children.length;
+        dynamicContent.classList.remove('hidden');
+        confirmBtn.disabled = false;
+        confirmBtn.innerText = "Siguiente";
 
-            setInterval(() => {
-                index = (index + 1) % total;
-                slider.style.transform = `translateX(-${index * 100}%)`;
-            }, 6000);
+        if (plan === 'free') {
+            dynamicContent.innerHTML = `<p class="text-emerald-400 italic text-sm text-center">Plan Free: Recibirás 100 tokens automáticamente.</p>`;
+            confirmBtn.innerText = "Activar Ahora";
+        } else {
+            dynamicContent.innerHTML = `
+                <div class="space-y-4">
+                    <p class="text-[10px] font-bold text-blue-400 uppercase tracking-widest text-center">Paso 1: Datos del Cliente</p>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <input type="text" id="u_name" name="name" placeholder="Tu nombre" required class="w-full bg-zinc-800 border border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                        <input type="email" id="u_email" name="email" placeholder="Correo para el código" required class="w-full bg-zinc-800 border border-white/10 rounded-lg px-3 py-2 text-sm outline-none">
+                    </div>
+                </div>`;
         }
-    });
+    }
+
+    function startCodeTimer() {
+        timeLeft = 10;
+        const display = document.getElementById('timer-count');
+        const mario = document.getElementById('marioDeathSound');
+        
+        stepTimer = setInterval(() => {
+            timeLeft--;
+            if (display) display.innerText = timeLeft;
+            if (timeLeft <= 0) {
+                clearInterval(stepTimer);
+                mario.play();
+                alert('¡Se acabó el tiempo!');
+            }
+        }, 1000);
+    }
+
+    function validateStep() {
+        const plan = document.querySelector('input[name="plan"]:checked').value;
+        const confirmBtn = document.getElementById('confirmLicenseBtn');
+        const mario = document.getElementById('marioDeathSound');
+
+        if (plan === 'free') {
+            document.getElementById('licenseForm').submit();
+            return;
+        }
+
+        if (currentStep === 1) {
+            const email = document.getElementById('u_email').value;
+            const now = Date.now();
+
+            if (lastRequestTime[email] && (now - lastRequestTime[email] < 15000)) {
+                mario.play();
+                alert('Espera 15 segundos.');
+                return;
+            }
+
+            if (!document.getElementById('u_name').value || !email) {
+                alert('Rellena los datos.');
+                return;
+            }
+
+            lastRequestTime[email] = now;
+            currentStep = 2;
+            confirmBtn.innerText = "Activar Ahora";
+            
+            document.getElementById('dynamicContent').innerHTML = `
+                <div class="space-y-4 text-center">
+                    <p class="text-[10px] font-bold text-amber-500 uppercase tracking-widest">Paso 2: Código de Activación</p>
+                    <input type="text" id="u_code" placeholder="Pega tu código aquí" class="w-full bg-zinc-800 border border-amber-500/50 rounded-lg px-4 py-3 text-center text-xl font-bold text-white outline-none">
+                    <div class="mt-2 py-1 px-3 bg-red-500/10 rounded-lg border border-red-500/20 inline-block">
+                        <p class="text-[11px] text-red-400 font-bold uppercase">Tiempo restante: <span id="timer-count">10</span>s</p>
+                    </div>
+                </div>`;
+            startCodeTimer();
+        } else {
+            if (!document.getElementById('u_code').value) { alert('Inserta el código.'); return; }
+            clearInterval(stepTimer);
+            document.getElementById('licenseForm').submit();
+        }
+    }
+
+    window.__SPIKIA_DASHBOARD__ = JSON.parse(document.getElementById('dashboard-config').dataset.config);
 </script>
-
 @endsection
-
-
