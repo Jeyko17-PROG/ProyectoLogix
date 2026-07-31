@@ -123,10 +123,41 @@
             <textarea name="master_translation_prompt" class="input-spikia" rows="5">{{ $sessionTranslation['master_translation_prompt'] ?? '' }}</textarea>
 
             @if(config('spikia.features.sign_avatar'))
-                <label class="idioma-item" style="margin-top: 20px;">
-                    <input type="checkbox" name="has_sign_avatar" value="1" {{ $sesion->has_sign_avatar ? 'checked' : '' }}>
-                    Avatar 3D en Lengua de Señas (beta) — solo para esta sala
-                </label>
+                <div x-data="{ avatarMode: '{{ $sesion->avatar_mode ?? '3d' }}' }" style="margin-top: 20px;">
+                    <label class="idioma-item">
+                        <input type="checkbox" name="has_sign_avatar" value="1" {{ $sesion->has_sign_avatar ? 'checked' : '' }}>
+                        Avatar 3D — demo, no es interpretación real de LSE (solo para esta sala)
+                    </label>
+
+                    <div style="margin-top: 10px; display: flex; gap: 12px; flex-wrap: wrap;">
+                        <label class="idioma-item">
+                            <input type="radio" name="avatar_mode" value="3d" x-model="avatarMode"> Avatar 3D
+                        </label>
+                        <label class="idioma-item">
+                            <input type="radio" name="avatar_mode" value="video" x-model="avatarMode"> Video pregrabado
+                        </label>
+                        <label class="idioma-item">
+                            <input type="radio" name="avatar_mode" value="human_live" x-model="avatarMode"> Intérprete en vivo (experimental)
+                        </label>
+                    </div>
+
+                    <div x-show="avatarMode === '3d'" style="margin-top: 10px;">
+                        <label class="label-mini">Personaje</label>
+                        <select name="avatar_character" class="input-spikia">
+                            <option value="avatar_femenino" {{ ($sesion->avatar_character ?? 'avatar_femenino') === 'avatar_femenino' ? 'selected' : '' }}>Avatar 1 (femenino)</option>
+                            <option value="avatar_masculino" {{ ($sesion->avatar_character ?? '') === 'avatar_masculino' ? 'selected' : '' }}>Avatar 2 (masculino)</option>
+                        </select>
+                    </div>
+
+                    <div x-show="avatarMode === 'video'" style="margin-top: 10px;">
+                        <label class="label-mini">URL del video</label>
+                        <input type="url" name="avatar_video_url" class="input-spikia" placeholder="https://..." value="{{ $sesion->avatar_video_url }}">
+                    </div>
+
+                    <div x-show="avatarMode === 'human_live'" style="margin-top: 10px; font-size: 11px; color: #fbbf24;">
+                        Experimental: todavía no hay proveedor de video en tiempo real conectado. Abre "Intérprete" desde el panel de sesiones para la vista previa local de cámara.
+                    </div>
+                </div>
             @endif
 
             <button type="submit" class="btn-save">ACTUALIZAR CONFIGURACIÓN COMPLETA</button>

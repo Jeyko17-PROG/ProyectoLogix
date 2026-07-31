@@ -93,9 +93,30 @@
     el navegador del oyente no descarga JS ni assets pesados en segundo plano. --}}
     @if(config('spikia.features.sign_avatar') && $sesion->has_sign_avatar)
         <div id="sign-avatar-container" class="hidden md:block fixed bottom-8 left-8 z-40 w-64 h-64 rounded-3xl border border-white/10 bg-zinc-950/80 backdrop-blur-md overflow-hidden shadow-2xl">
-            <canvas id="avatar-canvas" class="w-full h-full"></canvas>
+            <div class="pointer-events-none absolute top-1.5 left-1.5 right-1.5 z-10 rounded-full bg-amber-400/15 px-2 py-1 text-center text-[7px] font-black uppercase tracking-widest text-amber-200">
+                Demo — no es LSE real
+            </div>
+
+            <div id="avatar-render-container" class="relative h-full w-full">
+                @if($sesion->avatar_mode === 'video')
+                    <video id="avatar-video-player" class="h-full w-full object-cover" muted playsinline></video>
+                @elseif($sesion->avatar_mode === 'human_live')
+                    <video id="avatar-video-player" class="h-full w-full object-cover" muted playsinline autoplay></video>
+                    <p id="avatar-live-status" class="pointer-events-none absolute inset-x-0 bottom-6 px-2 text-center text-[7px] font-bold uppercase tracking-widest text-amber-200"></p>
+                @else
+                    <canvas id="avatar-canvas" class="w-full h-full"></canvas>
+                @endif
+
+                <p id="avatar-caption" class="pointer-events-none absolute bottom-2 left-1/2 -translate-x-1/2 text-center text-[10px] font-black uppercase tracking-widest text-cyan-300 drop-shadow-lg"></p>
+            </div>
         </div>
-        @vite(['resources/js/avatar-engine.js'])
+        @if($sesion->avatar_mode === 'video')
+            @vite(['resources/js/avatar-video-player.js'])
+        @elseif($sesion->avatar_mode === 'human_live')
+            @vite(['resources/js/avatar-interprete-viewer.js'])
+        @else
+            @vite(['resources/js/avatar-engine.js'])
+        @endif
     @endif
 </div>
 
@@ -118,6 +139,8 @@
         'audioDefaultEnabled' => ($sessionTranslation['translation_mode'] ?? 'voice_to_voice') === 'voice_to_voice',
         'preferLowLatencyAudio' => ($sessionTranslation['audio_delivery_mode'] ?? 'ultra_fast') === 'ultra_fast',
         'translationSettings' => $sessionTranslation,
+        'avatarCharacter' => $sesion->avatar_character,
+        'avatarVideoUrl' => $sesion->avatar_video_url,
     ];
 @endphp
 

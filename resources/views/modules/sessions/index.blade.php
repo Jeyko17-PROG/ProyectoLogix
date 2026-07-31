@@ -96,6 +96,8 @@
                                 $urlTransmision = SpikiaUrl::public(route('sesion.transmision', ['slug' => $s->slug]));
                                 $urlTransmisionLocal = route('sesion.transmision', ['slug' => $s->slug]);
                                 $urlMasterLocal = route('sesion.master', ['slug' => $s->slug]);
+                                $urlAvatarLocal = route('sesion.avatar', ['slug' => $s->slug]);
+                                $urlInterpreteLocal = route('sesion.interprete', ['slug' => $s->slug]);
                                 $ownerName = $s->user?->name ?? auth()->user()->name;
                                 $ownerEmail = $s->user?->email ?? auth()->user()->email;
                                 $qrSvg = $qrSvgs[$s->id] ?? null;
@@ -127,6 +129,16 @@
                                             <a href="{{ $urlMasterLocal }}" target="_blank" class="block text-[9px] font-black uppercase tracking-[0.25em] text-zinc-400 hover:text-white transition">
                                                 Abrir master
                                             </a>
+                                            @if(config('spikia.features.sign_avatar') && $s->has_sign_avatar)
+                                                <a href="{{ $urlAvatarLocal }}" target="_blank" class="block text-[9px] font-black uppercase tracking-[0.25em] text-fuchsia-300 hover:text-white transition" title="Demostración visual, no es interpretación real de Lengua de Señas">
+                                                    Avatar 3D (demo)
+                                                </a>
+                                                @if($s->avatar_mode === 'human_live')
+                                                    <a href="{{ $urlInterpreteLocal }}" target="_blank" class="block text-[9px] font-black uppercase tracking-[0.25em] text-amber-300 hover:text-white transition" title="Vista previa local de camara, sin envio real a los oyentes todavia">
+                                                        Intérprete (experimental)
+                                                    </a>
+                                                @endif
+                                            @endif
                                             <button type="button" onclick="downloadQrPng('{{ $s->slug }}', '{{ $urlTransmision }}')" class="block text-[9px] font-black uppercase tracking-[0.25em] text-neonBlue hover:text-white transition">
                                                 Descargar ZIP
                                             </button>
@@ -372,14 +384,43 @@
                         </div>
                     </div>
                     @if(config('spikia.features.sign_avatar'))
-                        <div class="rounded-[1.5rem] border border-fuchsia-400/15 bg-fuchsia-400/5 p-5">
+                        <div class="rounded-[1.5rem] border border-fuchsia-400/15 bg-fuchsia-400/5 p-5" x-data="{ avatarMode: '3d' }">
                             <label class="flex items-center gap-3 text-sm text-zinc-200">
                                 <input type="checkbox" name="has_sign_avatar" value="1" class="h-4 w-4">
                                 <span>
-                                    <span class="block font-bold">Avatar 3D en Lengua de Señas (beta)</span>
-                                    <span class="block text-xs text-zinc-400">Activa el avatar solo para esta sala. Si no lo marcas, no se carga ningún recurso extra en la transmisión.</span>
+                                    <span class="block font-bold">Avatar 3D — demo (no es interpretación real de LSE)</span>
+                                    <span class="block text-xs text-zinc-400">Activa un avatar de prueba solo para esta sala. Es una demostración visual del pipeline, no reemplaza un intérprete de Lengua de Señas certificado. Si no lo marcas, no se carga ningún recurso extra en la transmisión.</span>
                                 </span>
                             </label>
+
+                            <div class="mt-4 grid gap-2 sm:grid-cols-3">
+                                <label class="flex items-center gap-2 rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-xs text-zinc-300">
+                                    <input type="radio" name="avatar_mode" value="3d" x-model="avatarMode" checked> Avatar 3D
+                                </label>
+                                <label class="flex items-center gap-2 rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-xs text-zinc-300">
+                                    <input type="radio" name="avatar_mode" value="video" x-model="avatarMode"> Video pregrabado
+                                </label>
+                                <label class="flex items-center gap-2 rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-xs text-zinc-300">
+                                    <input type="radio" name="avatar_mode" value="human_live" x-model="avatarMode"> Intérprete en vivo (experimental)
+                                </label>
+                            </div>
+
+                            <div x-show="avatarMode === '3d'" class="mt-3">
+                                <label class="mb-1 block text-[10px] font-black uppercase tracking-widest text-zinc-500">Personaje</label>
+                                <select name="avatar_character" class="w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-xs text-zinc-200">
+                                    <option value="avatar_femenino">Avatar 1 (femenino)</option>
+                                    <option value="avatar_masculino">Avatar 2 (masculino)</option>
+                                </select>
+                            </div>
+
+                            <div x-show="avatarMode === 'video'" class="mt-3">
+                                <label class="mb-1 block text-[10px] font-black uppercase tracking-widest text-zinc-500">URL del video</label>
+                                <input type="url" name="avatar_video_url" placeholder="https://..." class="w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-xs text-zinc-200">
+                            </div>
+
+                            <div x-show="avatarMode === 'human_live'" class="mt-3 rounded-xl border border-amber-400/20 bg-amber-400/5 px-3 py-2 text-[11px] text-amber-200">
+                                Experimental: todavía no hay proveedor de video en tiempo real conectado (pendiente LiveKit/Agora). Una vez creada la sala, abre "Intérprete" desde el panel para la vista previa local de cámara.
+                            </div>
                         </div>
                     @endif
                     <button type="submit" class="w-full rounded-2xl bg-white px-6 py-4 text-[10px] font-black uppercase tracking-[0.35em] text-black transition hover:bg-neonBlue hover:text-white">

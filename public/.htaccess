@@ -23,3 +23,11 @@
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteRule ^ index.php [L]
 </IfModule>
+
+<IfModule mod_mime.c>
+    # Apache no trae estos mimetypes por defecto: sin esto el .glb se sirve sin
+    # Content-Type, lo cual funciona con GLTFLoader (lee ArrayBuffer sin validar el
+    # tipo) pero es fragil frente a proxies/CDNs que si dependen de la cabecera.
+    AddType model/gltf-binary .glb
+    AddType model/gltf+json .gltf
+</IfModule>

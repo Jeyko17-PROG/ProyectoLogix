@@ -20,6 +20,7 @@ Route::get('/', fn () => view('welcome'))->name('home');
 // Estas rutas deben ser accesibles para que el Listener no falle
 Route::get('/sesiones/{slug}/transmision', [SesionController::class, 'transmision'])->name('sesion.transmision');
 Route::get('/sesiones/{slug}/movil', [SesionController::class, 'movil'])->name('sesion.movil');
+Route::get('/sesiones/{slug}/avatar', [SesionController::class, 'avatar'])->name('sesion.avatar');
 Route::get('/sesiones/{slug}/mensajes', [SesionController::class, 'feed'])->name('sesiones.mensajes.feed');
 // Rutas públicas de voz: con throttle para evitar que un tercero queme la cuota de ElevenLabs.
 Route::post('/voz/elevenlabs', [SesionController::class, 'elevenlabs'])
@@ -53,6 +54,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Sesión Master y Control
     Route::get('/sesiones/{slug}/master', [SesionController::class, 'master'])->name('sesion.master');
     Route::get('/sesiones/{slug}/reunion', [SesionController::class, 'reunion'])->name('sesion.reunion');
+    // Modo 'human_live' del avatar: el dueño de la sesión transmite su propia cámara.
+    // Scaffold sin proveedor WebRTC real conectado todavía (ver avatar-interprete-broadcaster.js).
+    Route::get('/sesiones/{slug}/interprete', [SesionController::class, 'interprete'])->name('sesion.interprete');
     
     // Transcripciones
     Route::get('/transcripciones-historial', [TranscripcionController::class, 'listado'])->name('transcripciones.listado');

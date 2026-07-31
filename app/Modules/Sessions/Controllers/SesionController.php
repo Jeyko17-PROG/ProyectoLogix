@@ -100,6 +100,9 @@ class SesionController extends Controller
             'audio_delivery_mode' => ['nullable', Rule::in($audioDeliveryModes)],
             'master_translation_prompt' => ['nullable', 'string'],
             'has_sign_avatar' => ['nullable', 'boolean'],
+            'avatar_mode' => ['nullable', Rule::in(['3d', 'video', 'human_live'])],
+            'avatar_character' => ['nullable', Rule::in(['avatar_femenino', 'avatar_masculino'])],
+            'avatar_video_url' => ['nullable', 'url', 'max:500'],
         ]);
 
         $sesion = new Sesion();
@@ -115,6 +118,9 @@ class SesionController extends Controller
         // processAudio); se guarda igual para que la preferencia de la sala quede lista si se
         // habilita el modulo mas adelante.
         $sesion->has_sign_avatar = config('spikia.features.sign_avatar') && $request->boolean('has_sign_avatar');
+        $sesion->avatar_mode = $data['avatar_mode'] ?? '3d';
+        $sesion->avatar_character = $data['avatar_character'] ?? null;
+        $sesion->avatar_video_url = $data['avatar_video_url'] ?? null;
         $baseSlug = Str::slug($data['titulo']);
         do {
             $candidate = $baseSlug . '-' . Str::lower(Str::random(6));
@@ -166,6 +172,9 @@ class SesionController extends Controller
             'audio_delivery_mode' => ['nullable', Rule::in($audioDeliveryModes)],
             'master_translation_prompt' => ['nullable', 'string'],
             'has_sign_avatar' => ['nullable', 'boolean'],
+            'avatar_mode' => ['nullable', Rule::in(['3d', 'video', 'human_live'])],
+            'avatar_character' => ['nullable', Rule::in(['avatar_femenino', 'avatar_masculino'])],
+            'avatar_video_url' => ['nullable', 'url', 'max:500'],
         ]);
 
         $sesion = Sesion::where('id', $id)
@@ -180,6 +189,9 @@ class SesionController extends Controller
         $sesion->idiomas = $data['idiomas'] ?? [];
         $sesion->translation_settings = $this->buildTranslationSettings($data);
         $sesion->has_sign_avatar = config('spikia.features.sign_avatar') && $request->boolean('has_sign_avatar');
+        $sesion->avatar_mode = $data['avatar_mode'] ?? '3d';
+        $sesion->avatar_character = $data['avatar_character'] ?? null;
+        $sesion->avatar_video_url = $data['avatar_video_url'] ?? null;
         $sesion->save();
 
         return redirect()->route('sesiones.index')->with('success', 'Configuracion actualizada');
@@ -279,6 +291,32 @@ class SesionController extends Controller
             ->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
             ->header('Pragma', 'no-cache')
             ->header('Expires', '0');
+    }
+
+    public function avatar($slug)
+    {
+        $sesion = Sesion::where('slug', $slug)->firstOrFail();
+
+        abort_unless(config('spikia.features.sign_avatar') && $sesion->has_sign_avatar, 404);
+
+        $this->recordSessionUsage($sesion, 'avatar_opened');
+
+        return response()
+            ->view('modules.sessions.avatar', compact('sesion'))
+            ->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+            ->header('Pragma', 'no-cache')
+            ->header('Expires', '0');
+    }
+
+    public function interprete($slug)
+    {
+        $sesion = Sesion::where('slug', $slug)
+            ->where('user_id', auth()->id())
+            ->firstOrFail();
+
+        abort_unless(config('spikia.features.sign_avatar'), 404);
+
+        return view('modules.sessions.interprete', compact('sesion'));
     }
 
     public function processAudio(Request $request, string $slug)
