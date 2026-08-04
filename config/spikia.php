@@ -6,6 +6,7 @@ return [
     // siquiera debe evaluarse (ver guards con config('spikia.features.x') && ...).
     'features' => [
         'sign_avatar' => (bool) env('ENABLE_SIGN_AVATAR', false),
+        'meeting_bot' => (bool) env('ENABLE_MEETING_BOT', false),
     ],
 
     'demo_duration_minutes' => 20,
@@ -14,6 +15,13 @@ return [
     'voice_provider' => env('SPIKIA_VOICE_PROVIDER', 'elevenlabs'),
     'socket_enabled' => (bool) env('SPIKIA_SOCKET_ENABLED', false),
     'socket_url' => env('SPIKIA_SOCKET_URL'),
+    // Worker Node.js separado (ver /meet-bot) que entra a una reunion de Meet/Zoom como
+    // invitado y captura su audio. Vive fuera de PHP porque necesita un navegador Chrome
+    // persistente por reunion; Laravel solo lo orquesta via esta URL interna.
+    'meeting_bot' => [
+        'url' => env('SPIKIA_MEETBOT_URL', 'http://127.0.0.1:4100'),
+        'secret' => env('SPIKIA_MEETBOT_SECRET'),
+    ],
     'elevenlabs' => [
         'enabled' => (bool) env('ELEVENLABS_ENABLED', false),
         'api_key' => env('ELEVENLABS_API_KEY'),

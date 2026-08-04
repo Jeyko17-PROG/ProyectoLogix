@@ -383,6 +383,23 @@
                             <textarea name="master_translation_prompt" rows="4" class="w-full rounded-2xl border border-white/10 bg-black/60 px-5 py-4 text-white outline-none focus:border-neonBlue">{{ $tsConfig['master_translation_prompt'] ?? '' }}</textarea>
                         </div>
                     </div>
+                    <div class="rounded-[1.5rem] border border-white/10 bg-white/5 p-5 space-y-3">
+                        <div>
+                            <label class="mb-1 block text-[10px] font-black uppercase tracking-widest text-zinc-500">Enlace de la reunión a traducir (Zoom / Google Meet) — opcional</label>
+                            <input type="url" name="zoom_link" placeholder="https://meet.google.com/... o https://zoom.us/j/..." class="w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-xs text-zinc-200">
+                            <p class="mt-2 text-[11px] text-zinc-400">Pégalo aquí. Desde el panel Master podrás abrirlo con un clic y compartir el audio de esa pestaña para traducirlo en vivo (modo "Pestaña / Zoom / Meet")@if(config('spikia.features.meeting_bot')), o pedirle al bot de Spikia que entre solo a esa reunión @endif.</p>
+                        </div>
+                        @if(config('spikia.features.meeting_bot'))
+                            <div>
+                                <label class="mb-1 block text-[10px] font-black uppercase tracking-widest text-zinc-500">Idioma que se habla en esa reunión (para el bot)</label>
+                                <select name="meeting_bot_source_lang" class="w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-xs text-zinc-200">
+                                    @foreach(config('spikia.master_languages', []) as $language)
+                                        <option value="{{ $language['id'] }}" {{ $language['id'] === 'es-ES' ? 'selected' : '' }}>{{ $language['name'] }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                        @endif
+                    </div>
                     @if(config('spikia.features.sign_avatar'))
                         <div class="rounded-[1.5rem] border border-fuchsia-400/15 bg-fuchsia-400/5 p-5" x-data="{ avatarMode: '3d' }">
                             <label class="flex items-center gap-3 text-sm text-zinc-200">

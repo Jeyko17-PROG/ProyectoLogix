@@ -68,6 +68,11 @@
     $masterConfig['clonedVoiceId'] = $sesion->cloned_voice_id;
     $masterConfig['liveTimerStartUrl'] = route('sesiones.live-timer.start', ['slug' => $sesion->slug], false);
     $masterConfig['liveTimerStopUrl'] = route('sesiones.live-timer.stop', ['slug' => $sesion->slug], false);
+    if (config('spikia.features.meeting_bot')) {
+        $masterConfig['meetingBotStartUrl'] = route('sesiones.meeting-bot.start', ['slug' => $sesion->slug], false);
+        $masterConfig['meetingBotStopUrl'] = route('sesiones.meeting-bot.stop', ['slug' => $sesion->slug], false);
+        $masterConfig['meetingBotStatusUrl'] = route('sesiones.meeting-bot.status', ['slug' => $sesion->slug], false);
+    }
     $masterConfig['liveStartedAt'] = $sesion->live_started_at?->toIso8601String();
     $masterConfig['liveAccumulatedSeconds'] = (int) $sesion->live_accumulated_seconds;
 @endphp
@@ -195,9 +200,14 @@
                 <p class="text-[8px] font-black uppercase tracking-[0.25em] text-zinc-500">Fuente de audio</p>
                 <button id="master-mic-test" type="button" class="rounded-full border border-cyan-400/30 bg-cyan-400/10 px-3 py-1 text-[8px] font-black uppercase tracking-[0.2em] text-cyan-200 transition-all">Probar</button>
             </div>
+            @if($sesion->zoom_link)
+                <a href="{{ $sesion->zoom_link }}" target="_blank" rel="noopener" class="block w-full rounded-xl border border-emerald-400/30 bg-emerald-400/10 py-2 text-center text-[9px] font-black uppercase tracking-[0.2em] text-emerald-200 hover:bg-emerald-400/20 transition-all">
+                    Abrir reunión (Zoom/Meet)
+                </a>
+            @endif
             <div class="grid grid-cols-2 gap-2">
                 <button id="master-source-mic" type="button" class="source-btn py-2 rounded-xl text-[9px] font-black border border-white/10 transition-all" data-source="microphone">MICRÓFONO</button>
-                <button id="master-source-tab" type="button" class="source-btn py-2 rounded-xl text-[9px] font-black border border-white/10 transition-all" data-source="tab">PESTAÑA / VIDEO</button>
+                <button id="master-source-tab" type="button" class="source-btn py-2 rounded-xl text-[9px] font-black border border-white/10 transition-all" data-source="tab">PESTAÑA / ZOOM / MEET</button>
             </div>
             <select id="master-mic-select" class="w-full bg-zinc-950 border border-white/10 rounded-xl px-3 py-2 text-[10px] font-black uppercase tracking-widest text-white">
                 <option value="">Micrófono predeterminado</option>
@@ -207,6 +217,20 @@
             </div>
             <p id="master-mic-hint" class="text-[8px] uppercase tracking-[0.2em] text-zinc-600">Elige tu micrófono y pulsa Probar: la barra debe moverse al hablar.</p>
         </div>
+
+        @if(config('spikia.features.meeting_bot') && $sesion->zoom_link)
+            <div class="rounded-[1.5rem] border border-fuchsia-400/15 bg-fuchsia-400/5 px-4 py-4 space-y-3">
+                <div class="flex items-center justify-between gap-2">
+                    <p class="text-[8px] font-black uppercase tracking-[0.25em] text-zinc-500">Bot de reunión (beta)</p>
+                    <span id="meeting-bot-status-badge" class="rounded-full border border-white/10 bg-black/30 px-2 py-1 text-[8px] font-black uppercase tracking-[0.2em] text-zinc-400">Inactivo</span>
+                </div>
+                <p class="text-[8px] leading-relaxed text-zinc-500">Spikia entra a la reunión como invitado usando el enlace de arriba y traduce lo que se dice ahí. El anfitrión debe admitirlo cuando pida unirse.</p>
+                <div class="grid grid-cols-2 gap-2">
+                    <button id="meeting-bot-start" type="button" class="py-2 rounded-xl text-[9px] font-black border border-emerald-400/30 bg-emerald-400/10 text-emerald-200 hover:bg-emerald-400/20 transition-all">Unir bot</button>
+                    <button id="meeting-bot-stop" type="button" class="py-2 rounded-xl text-[9px] font-black border border-red-400/30 bg-red-400/10 text-red-200 hover:bg-red-400/20 transition-all">Detener bot</button>
+                </div>
+            </div>
+        @endif
 
         <button id="master-live-btn" class="group relative w-full bg-zinc-900 border border-white/10 hover:border-indigo-600/50 rounded-[1.5rem] p-5 transition-all duration-500 overflow-hidden shadow-2xl">
             <div class="relative z-10 flex flex-col items-center gap-2">

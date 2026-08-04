@@ -17,3 +17,8 @@ Schedule::command('spikia:sessions:cleanup')->dailyAt('04:00');
 // Los MP3 de traduccion se acumulan en storage/app/public/traducciones y nunca
 // se borraban: el disco crecia sin limite. Limpiamos los de mas de 6h cada hora.
 Schedule::command('spikia:audio:cleanup --hours=6')->hourly();
+
+// El worker del bot de reunion (Node, fuera de Laravel) puede morirse sin avisar (VPS
+// caido, Chrome crasheado, etc.). Si dejo de mandar heartbeat por mas de 90s lo marcamos
+// como error para que la UI del Master no se quede mostrando "activo" indefinidamente.
+Schedule::command('spikia:meeting-bot:sweep')->everyMinute();

@@ -22,6 +22,11 @@ Route::get('/sesiones/{slug}/transmision', [SesionController::class, 'transmisio
 Route::get('/sesiones/{slug}/movil', [SesionController::class, 'movil'])->name('sesion.movil');
 Route::get('/sesiones/{slug}/avatar', [SesionController::class, 'avatar'])->name('sesion.avatar');
 Route::get('/sesiones/{slug}/mensajes', [SesionController::class, 'feed'])->name('sesiones.mensajes.feed');
+// Ingesta de audio del worker del bot de reunion (Node, sin sesion de navegador ni CSRF):
+// la autorizacion es el header X-Spikia-Bot-Token, ver ingestBotAudio().
+Route::post('/sesiones/{slug}/bot-audio', [SesionController::class, 'ingestBotAudio'])
+    ->middleware('throttle:30,1')
+    ->name('sesiones.bot-audio.ingest');
 // Rutas públicas de voz: con throttle para evitar que un tercero queme la cuota de ElevenLabs.
 Route::post('/voz/elevenlabs', [SesionController::class, 'elevenlabs'])
     ->middleware('throttle:120,1')
@@ -77,6 +82,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::delete('/sesiones/{slug}/voice-clone', [SesionController::class, 'removeVoiceClone'])->name('sesiones.voice-clone.destroy');
     Route::post('/sesiones/{slug}/live-timer/start', [SesionController::class, 'startLiveTimer'])->name('sesiones.live-timer.start');
     Route::post('/sesiones/{slug}/live-timer/stop', [SesionController::class, 'stopLiveTimer'])->name('sesiones.live-timer.stop');
+    Route::post('/sesiones/{slug}/meeting-bot/start', [SesionController::class, 'startMeetingBot'])->name('sesiones.meeting-bot.start');
+    Route::post('/sesiones/{slug}/meeting-bot/stop', [SesionController::class, 'stopMeetingBot'])->name('sesiones.meeting-bot.stop');
+    Route::get('/sesiones/{slug}/meeting-bot/status', [SesionController::class, 'meetingBotStatus'])->name('sesiones.meeting-bot.status');
 
     // Voz / STT externos
     Route::post('/deepgram/token', [SesionController::class, 'deepgramToken'])->name('deepgram.token');

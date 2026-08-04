@@ -159,6 +159,9 @@ if (config) {
             micTest: document.getElementById('master-mic-test'),
             micLevel: document.getElementById('master-mic-level'),
             micHint: document.getElementById('master-mic-hint'),
+            meetingBotStart: document.getElementById('meeting-bot-start'),
+            meetingBotStop: document.getElementById('meeting-bot-stop'),
+            meetingBotBadge: document.getElementById('meeting-bot-status-badge'),
             sourceMic: document.getElementById('master-source-mic'),
             sourceTab: document.getElementById('master-source-tab'),
         };
@@ -183,6 +186,9 @@ if (config) {
         const translationSettingsUrl = config.translationSettingsUrl;
         const liveTimerStartUrl = config.liveTimerStartUrl;
         const liveTimerStopUrl = config.liveTimerStopUrl;
+        const meetingBotStartUrl = config.meetingBotStartUrl;
+        const meetingBotStopUrl = config.meetingBotStopUrl;
+        const meetingBotStatusUrl = config.meetingBotStatusUrl;
         const csrfToken = config.csrfToken;
         const availableVoiceProfiles = normalizeVoiceProfiles(config.availableVoices || []);
         let currentVoice = config.translationSettings?.voice || 'marin';
@@ -714,7 +720,7 @@ if (config) {
             if (elements.micTest) elements.micTest.disabled = isTab;
             if (elements.micHint) {
                 elements.micHint.textContent = isTab
-                    ? 'Audio de pestaña: al iniciar, elige la pestaña del video y marca "Compartir audio". Solo en Chrome/Edge de PC.'
+                    ? 'Para traducir Zoom/Meet: ábrelo en otra pestaña → aquí pulsa Iniciar → en el selector del navegador elige esa pestaña y marca "Compartir audio". Solo en Chrome/Edge de escritorio.'
                     : 'Elige tu micrófono y pulsa Probar: la barra debe moverse al hablar.';
             }
         }
@@ -860,6 +866,92 @@ if (config) {
         populateMicDevices();
         if (navigator.mediaDevices && typeof navigator.mediaDevices.addEventListener === 'function') {
             navigator.mediaDevices.addEventListener('devicechange', populateMicDevices);
+        }
+
+        // --- Bot de reunion: entra a Meet/Zoom como invitado y captura su audio. Es
+        // independiente del flujo de microfono/pestaña de arriba: no comparte estado con
+        // MediaRecorder, solo prende/apaga un proceso en el worker de /meet-bot y hace
+        // polling del estado para mostrar un badge. ---
+        let meetingBotPollTimer = null;
+
+        function setMeetingBotBadge(status) {
+            if (!elements.meetingBotBadge) return;
+            const labels = {
+                idle: 'Inactivo', joining: 'Uniéndose…', active: 'En vivo', error: 'Error', stopped: 'Detenido',
+            };
+            elements.meetingBotBadge.textContent = labels[status] || 'Inactivo';
+            elements.meetingBotBadge.classList.toggle('text-emerald-300', status === 'active');
+            elements.meetingBotBadge.classList.toggle('text-amber-300', status === 'joining');
+            elements.meetingBotBadge.classList.toggle('text-red-300', status === 'error');
+        }
+
+        async function pollMeetingBotStatus() {
+            if (!meetingBotStatusUrl) return;
+            try {
+                const response = await fetch(meetingBotStatusUrl, {
+                    headers: { 'Accept': 'application/json' },
+                    credentials: 'same-origin',
+                });
+                if (!response.ok) return;
+                const payload = await response.json();
+                setMeetingBotBadge(payload?.status);
+                if (payload?.status === 'joining' || payload?.status === 'active') {
+                    if (!meetingBotPollTimer) meetingBotPollTimer = setInterval(pollMeetingBotStatus, 5000);
+                } else if (meetingBotPollTimer) {
+                    clearInterval(meetingBotPollTimer);
+                    meetingBotPollTimer = null;
+                }
+            } catch (error) {
+                console.warn('No se pudo consultar el estado del bot de reunion:', error);
+            }
+        }
+
+        if (elements.meetingBotStart) {
+            elements.meetingBotStart.addEventListener('click', async () => {
+                if (!meetingBotStartUrl) return;
+                setMeetingBotBadge('joining');
+                try {
+                    const response = await fetch(meetingBotStartUrl, {
+                        method: 'POST',
+                        headers: { 'Accept': 'application/json', 'X-CSRF-TOKEN': csrfToken },
+                        credentials: 'same-origin',
+                    });
+                    const payload = await response.json().catch(() => null);
+                    if (!response.ok) {
+                        setMeetingBotBadge('error');
+                        updateUIBox(payload?.message || 'No se pudo unir el bot a la reunión.', 'Sistema');
+                        return;
+                    }
+                    pollMeetingBotStatus();
+                } catch (error) {
+                    setMeetingBotBadge('error');
+                    console.warn('No se pudo iniciar el bot de reunion:', error);
+                }
+            });
+        }
+        if (elements.meetingBotStop) {
+            elements.meetingBotStop.addEventListener('click', async () => {
+                if (!meetingBotStopUrl) return;
+                try {
+                    const response = await fetch(meetingBotStopUrl, {
+                        method: 'POST',
+                        headers: { 'Accept': 'application/json', 'X-CSRF-TOKEN': csrfToken },
+                        credentials: 'same-origin',
+                    });
+                    const payload = await response.json().catch(() => null);
+                    setMeetingBotBadge(payload?.status || 'stopped');
+                } catch (error) {
+                    console.warn('No se pudo detener el bot de reunion:', error);
+                } finally {
+                    if (meetingBotPollTimer) {
+                        clearInterval(meetingBotPollTimer);
+                        meetingBotPollTimer = null;
+                    }
+                }
+            });
+        }
+        if (meetingBotStatusUrl) {
+            pollMeetingBotStatus();
         }
 
         function isSecureOriginForMic() {

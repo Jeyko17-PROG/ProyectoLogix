@@ -33,7 +33,8 @@ class SesionController extends Controller
 
     public function __construct(
         private OpenAITranslationService $openai,
-        private ElevenLabsVoiceCloningService $voiceCloning
+        private ElevenLabsVoiceCloningService $voiceCloning,
+        private \App\Services\MeetingBotClient $meetingBot
     ) {}
 
     public function index(QrCodeService $qrCodeService)
@@ -103,6 +104,8 @@ class SesionController extends Controller
             'avatar_mode' => ['nullable', Rule::in(['3d', 'video', 'human_live'])],
             'avatar_character' => ['nullable', Rule::in(['avatar_femenino', 'avatar_masculino'])],
             'avatar_video_url' => ['nullable', 'url', 'max:500'],
+            'zoom_link' => ['nullable', 'url', 'max:500'],
+            'meeting_bot_source_lang' => ['nullable', 'string', 'max:10'],
         ]);
 
         $sesion = new Sesion();
@@ -121,6 +124,10 @@ class SesionController extends Controller
         $sesion->avatar_mode = $data['avatar_mode'] ?? '3d';
         $sesion->avatar_character = $data['avatar_character'] ?? null;
         $sesion->avatar_video_url = $data['avatar_video_url'] ?? null;
+        // Enlace de la reunion de Zoom/Meet a traducir: se usa tanto para el modo manual de
+        // captura de pestaña del Master como para el bot que entra solo a la reunion.
+        $sesion->zoom_link = $data['zoom_link'] ?? null;
+        $sesion->meeting_bot_source_lang = $data['meeting_bot_source_lang'] ?? null;
         $baseSlug = Str::slug($data['titulo']);
         do {
             $candidate = $baseSlug . '-' . Str::lower(Str::random(6));
@@ -175,6 +182,8 @@ class SesionController extends Controller
             'avatar_mode' => ['nullable', Rule::in(['3d', 'video', 'human_live'])],
             'avatar_character' => ['nullable', Rule::in(['avatar_femenino', 'avatar_masculino'])],
             'avatar_video_url' => ['nullable', 'url', 'max:500'],
+            'zoom_link' => ['nullable', 'url', 'max:500'],
+            'meeting_bot_source_lang' => ['nullable', 'string', 'max:10'],
         ]);
 
         $sesion = Sesion::where('id', $id)
@@ -192,6 +201,8 @@ class SesionController extends Controller
         $sesion->avatar_mode = $data['avatar_mode'] ?? '3d';
         $sesion->avatar_character = $data['avatar_character'] ?? null;
         $sesion->avatar_video_url = $data['avatar_video_url'] ?? null;
+        $sesion->zoom_link = $data['zoom_link'] ?? null;
+        $sesion->meeting_bot_source_lang = $data['meeting_bot_source_lang'] ?? null;
         $sesion->save();
 
         return redirect()->route('sesiones.index')->with('success', 'Configuracion actualizada');
@@ -338,6 +349,24 @@ class SesionController extends Controller
         ]);
 
         $audioFile = $request->file('audio');
+
+        if ($errorResponse = $this->validateAudioUpload($audioFile)) {
+            return $errorResponse;
+        }
+
+        if ($errorResponse = $this->ensureOpenAiConfigured()) {
+            return $errorResponse;
+        }
+
+        return $this->handleIncomingAudioSegment($sesion, $slug, $audioFile, $data);
+    }
+
+    /**
+     * Valida que el archivo de audio subido tenga una extension/mime soportada. Compartido
+     * entre processAudio() (mic del dueño) e ingestBotAudio() (worker del bot de reunion).
+     */
+    private function validateAudioUpload(\Illuminate\Http\UploadedFile $audioFile): ?\Illuminate\Http\JsonResponse
+    {
         $clientExtension = strtolower((string) $audioFile->getClientOriginalExtension());
         $mimeType = strtolower((string) $audioFile->getMimeType());
         $allowedExtensions = ['webm', 'ogg', 'mp3', 'wav', 'm4a', 'mp4'];
@@ -356,6 +385,11 @@ class SesionController extends Controller
             ], 422);
         }
 
+        return null;
+    }
+
+    private function ensureOpenAiConfigured(): ?\Illuminate\Http\JsonResponse
+    {
         if ((string) config('services.openai.key', '') === '') {
             return response()->json([
                 'success' => false,
@@ -363,10 +397,23 @@ class SesionController extends Controller
             ], 503);
         }
 
+        return null;
+    }
+
+    /**
+     * Transcribe, traduce y publica un segmento de audio ya validado. Compartido por el
+     * flujo de microfono del dueño (processAudio) y el del bot de reunion (ingestBotAudio):
+     * a partir de aca no importa de donde vino el audio, solo que ya hay un $sesion resuelto
+     * y un $data con lang/lang_base/gender/save_mode.
+     */
+    private function handleIncomingAudioSegment(Sesion $sesion, string $slug, \Illuminate\Http\UploadedFile $audioFile, array $data): \Illuminate\Http\JsonResponse
+    {
         $settings = $this->resolveTranslationSettings($sesion);
         $translationPrompt = $this->buildSessionTranslationPrompt($sesion, $settings);
         $inputLanguage = $this->normalizeSpeechLanguage($data['lang'] ?? 'es');
-        $extension = in_array($clientExtension, $allowedExtensions, true)
+        $clientExtension = strtolower((string) $audioFile->getClientOriginalExtension());
+        $mimeType = strtolower((string) $audioFile->getMimeType());
+        $extension = in_array($clientExtension, ['webm', 'ogg', 'mp3', 'wav', 'm4a', 'mp4'], true)
             ? $clientExtension
             : $this->audioExtensionFromMime($mimeType);
         $storagePath = $audioFile->storeAs(
@@ -526,6 +573,129 @@ class SesionController extends Controller
             'original_transcript' => $originalTranscript,
             'messages' => $messages,
             'translation_settings' => $settings,
+        ]);
+    }
+
+    /**
+     * Recibe los segmentos de audio que el worker de /meet-bot va subiendo mientras esta
+     * dentro de una reunion de Meet/Zoom. No hay usuario autenticado aca (es un proceso Node
+     * sin sesion de navegador): la autorizacion es el token por-sesion en bot_ingest_token,
+     * comparado con hash_equals ANTES de tocar storage/OpenAI.
+     */
+    public function ingestBotAudio(Request $request, string $slug)
+    {
+        abort_unless(config('spikia.features.meeting_bot'), 404);
+
+        $sesion = Sesion::where('slug', $slug)->firstOrFail();
+
+        $token = (string) $request->header('X-Spikia-Bot-Token', '');
+        abort_unless($sesion->bot_ingest_token && hash_equals($sesion->bot_ingest_token, $token), 401);
+
+        $request->validate([
+            'audio' => ['required', 'file', 'max:25600'],
+        ]);
+
+        $audioFile = $request->file('audio');
+
+        if ($errorResponse = $this->validateAudioUpload($audioFile)) {
+            return $errorResponse;
+        }
+
+        if ($errorResponse = $this->ensureOpenAiConfigured()) {
+            return $errorResponse;
+        }
+
+        // El primer chunk que llega es la unica confirmacion real de que el worker ya esta
+        // dentro de la reunion capturando audio (Laravel no tiene otra forma de saberlo).
+        $sesion->meeting_bot_status = 'active';
+        $sesion->meeting_bot_last_heartbeat_at = now();
+        $sesion->save();
+
+        $sourceLang = $sesion->meeting_bot_source_lang ?: 'es-ES';
+
+        return $this->handleIncomingAudioSegment($sesion, $slug, $audioFile, [
+            'lang' => $sourceLang,
+            'lang_base' => explode('-', $sourceLang)[0] ?? 'es',
+            'save_mode' => 'resumen',
+        ]);
+    }
+
+    /**
+     * Le pide al worker de /meet-bot que entre a la reunion guardada en zoom_link. Idempotente:
+     * si ya esta uniendose/activo no rota el token (evita invalidar lo que el worker ya tiene
+     * cacheado si el dueño hace doble clic).
+     */
+    public function startMeetingBot(Request $request, string $slug)
+    {
+        abort_unless(config('spikia.features.meeting_bot'), 404);
+
+        $sesion = Sesion::where('slug', $slug)
+            ->where('user_id', auth()->id())
+            ->firstOrFail();
+
+        abort_if(empty($sesion->zoom_link), 422, 'Esta sesion no tiene un enlace de reunion configurado.');
+
+        $data = $request->validate([
+            'source_lang' => ['nullable', 'string', 'max:10'],
+        ]);
+
+        if (! in_array($sesion->meeting_bot_status, ['joining', 'active'], true)) {
+            $sesion->bot_ingest_token = Str::random(40);
+        }
+        $sesion->meeting_bot_source_lang = $data['source_lang'] ?? $sesion->meeting_bot_source_lang ?? 'es-ES';
+        $sesion->meeting_bot_status = 'joining';
+        $sesion->meeting_bot_last_heartbeat_at = null;
+        $sesion->save();
+
+        try {
+            $ingestUrl = route('sesiones.bot-audio.ingest', ['slug' => $sesion->slug]);
+            $this->meetingBot->join($sesion, $ingestUrl);
+        } catch (\Throwable $e) {
+            $sesion->meeting_bot_status = 'error';
+            $sesion->save();
+
+            return response()->json([
+                'success' => false,
+                'message' => 'No se pudo contactar al worker del bot de reunion.',
+            ], 502);
+        }
+
+        return response()->json(['success' => true, 'status' => $sesion->meeting_bot_status]);
+    }
+
+    public function stopMeetingBot(string $slug)
+    {
+        abort_unless(config('spikia.features.meeting_bot'), 404);
+
+        $sesion = Sesion::where('slug', $slug)
+            ->where('user_id', auth()->id())
+            ->firstOrFail();
+
+        try {
+            $this->meetingBot->leave($sesion);
+        } catch (\Throwable $e) {
+            // El worker no respondio, pero igual dejamos la sesion como detenida del lado de
+            // Spikia: el usuario pidio parar y no debe quedar atascado en "activo" para siempre.
+        }
+
+        $sesion->meeting_bot_status = 'stopped';
+        $sesion->bot_ingest_token = null;
+        $sesion->save();
+
+        return response()->json(['success' => true, 'status' => $sesion->meeting_bot_status]);
+    }
+
+    public function meetingBotStatus(string $slug)
+    {
+        abort_unless(config('spikia.features.meeting_bot'), 404);
+
+        $sesion = Sesion::where('slug', $slug)
+            ->where('user_id', auth()->id())
+            ->firstOrFail();
+
+        return response()->json([
+            'status' => $sesion->meeting_bot_stale ? 'error' : ($sesion->meeting_bot_status ?? 'idle'),
+            'last_heartbeat_at' => $sesion->meeting_bot_last_heartbeat_at?->toIso8601String(),
         ]);
     }
 

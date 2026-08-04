@@ -29,6 +29,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'voz/elevenlabs',
             'traducciones',
             'sesiones/*/mensajes',
+            'sesiones/*/bot-audio',
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

@@ -122,6 +122,25 @@
             <label class="label-mini">Prompt Maestro</label>
             <textarea name="master_translation_prompt" class="input-spikia" rows="5">{{ $sessionTranslation['master_translation_prompt'] ?? '' }}</textarea>
 
+            <div style="margin-top: 20px;">
+                <label class="label-mini">Enlace de la reunión a traducir (Zoom / Google Meet) — opcional</label>
+                <input type="url" name="zoom_link" class="input-spikia" placeholder="https://meet.google.com/... o https://zoom.us/j/..." value="{{ $sesion->zoom_link }}">
+                <div style="margin-top: 6px; font-size: 11px; color: #a1a1aa;">
+                    Pégalo aquí. Desde el panel Master podrás abrirlo con un clic y compartir el audio de esa pestaña para traducirlo en vivo (modo "Pestaña / Zoom / Meet")@if(config('spikia.features.meeting_bot')), o pedirle al bot de Spikia que entre solo a esa reunión @endif.
+                </div>
+            </div>
+
+            @if(config('spikia.features.meeting_bot'))
+                <div style="margin-top: 12px;">
+                    <label class="label-mini">Idioma que se habla en esa reunión (para el bot)</label>
+                    <select name="meeting_bot_source_lang" class="select-spikia">
+                        @foreach(config('spikia.master_languages', []) as $language)
+                            <option value="{{ $language['id'] }}" {{ ($sesion->meeting_bot_source_lang ?? 'es-ES') === $language['id'] ? 'selected' : '' }}>{{ $language['name'] }}</option>
+                        @endforeach
+                    </select>
+                </div>
+            @endif
+
             @if(config('spikia.features.sign_avatar'))
                 <div x-data="{ avatarMode: '{{ $sesion->avatar_mode ?? '3d' }}' }" style="margin-top: 20px;">
                     <label class="idioma-item">
