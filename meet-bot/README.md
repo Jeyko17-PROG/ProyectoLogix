@@ -5,9 +5,35 @@ un navegador Chrome automatizado) y sube el audio capturado al endpoint de inges
 (`POST /sesiones/{slug}/bot-audio`).
 
 No corre dentro de PHP: necesita un proceso persistente con Chrome instalado, algo que la
-mayoría de hosting compartido no permite. Está pensado para correr en el VPS con acceso SSH.
+mayoría de hosting compartido no permite.
 
-## Instalación en el VPS
+## Desplegar en Render (este proyecto usa Render)
+
+Render **no** detecta ni levanta este worker solo porque el código llegó al repo — hay que
+crear un servicio nuevo a mano, aparte del servicio web de Laravel:
+
+1. En el dashboard de Render: **New +** → **Web Service** (o **Private Service** si tu plan lo
+   ofrece — así no queda accesible desde internet, solo desde otros servicios del mismo
+   proyecto/red privada de Render. Si no aparece esa opción, usa Web Service normal y confía en
+   el secreto compartido para la seguridad).
+2. Conecta el mismo repo de GitHub (`ProyectoLogix`), pero indica **Root Directory: `meet-bot`**
+   y **Runtime: Docker** (ya dejé un `Dockerfile` en esta carpeta con Chrome + Xvfb
+   preinstalados, no hace falta configurar build command a mano).
+3. Variables de entorno de este servicio: `SPIKIA_MEETBOT_SECRET` = un valor largo y aleatorio
+   que tú elijas (guárdalo, lo necesitas también del lado de Laravel).
+4. Deploy. Cuando termine, Render te da la URL interna del servicio (o la URL pública si usaste
+   Web Service normal) — algo como `https://spikia-meet-bot.onrender.com` o, si es un Private
+   Service, un host interno tipo `spikia-meet-bot:4100` alcanzable solo desde otros servicios
+   Render del mismo proyecto.
+5. En el servicio **web de Laravel** (el que ya tienes), agrega/edita estas variables de
+   entorno y vuelve a desplegar (o usa "Manual Deploy" para que las tome):
+   ```
+   ENABLE_MEETING_BOT=true
+   SPIKIA_MEETBOT_URL=<la URL del paso 4>
+   SPIKIA_MEETBOT_SECRET=<el mismo valor del paso 3>
+   ```
+
+## Instalación manual en un VPS propio (alternativa a Render)
 
 ```bash
 # Dependencias de sistema para Chrome headless (Debian/Ubuntu)
@@ -32,8 +58,10 @@ SPIKIA_MEETBOT_SECRET=el-mismo-secreto-que-en-laravel pm2 start index.js --name 
 pm2 save
 ```
 
-El puerto (`127.0.0.1:4100` por defecto, ya viene atado a localhost en `index.js`) **no debe
-exponerse públicamente** — solo Laravel necesita alcanzarlo.
+Si corres esta variante en un VPS propio, deja el puerto (`4100` por defecto) bloqueado por
+firewall para que solo el propio servidor/red privada pueda alcanzarlo — el proceso escucha en
+`0.0.0.0` (necesario para la variante Docker/Render), así que la seguridad de red la tiene que
+poner el firewall del VPS, no el binding del proceso.
 
 ## Advertencias
 

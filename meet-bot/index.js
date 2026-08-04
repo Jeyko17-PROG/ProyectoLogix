@@ -1,7 +1,10 @@
 // API interna diminuta que Laravel usa para orquestar el bot (ver app/Services/MeetingBotClient.php).
-// No debe exponerse publicamente: solo Laravel (mismo servidor o red privada) deberia poder
-// alcanzar este puerto. La autenticacion es un secreto compartido simple, no OAuth ni nada
-// mas elaborado, porque el unico cliente esperado es el propio backend.
+// No debe exponerse publicamente: solo Laravel deberia poder alcanzar este puerto (en Render,
+// via un servicio "Private"/red interna; en un VPS propio, dejando el puerto solo accesible
+// desde localhost/red privada con el firewall). La autenticacion real de todos modos es el
+// secreto compartido de abajo, no la ubicacion de red: escucha en 0.0.0.0 porque cuando este
+// worker corre en su propio contenedor (Render, Docker) 127.0.0.1 solo se referiria a si mismo
+// y Laravel, en OTRO contenedor, nunca podria alcanzarlo.
 
 const express = require('express');
 const bot = require('./bot');
@@ -53,6 +56,6 @@ app.get('/status/:slug', (req, res) => {
     res.json({ status: bot.statusOf(req.params.slug) });
 });
 
-app.listen(PORT, '127.0.0.1', () => {
-    console.log(`spikia-meet-bot escuchando en 127.0.0.1:${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+    console.log(`spikia-meet-bot escuchando en 0.0.0.0:${PORT}`);
 });
