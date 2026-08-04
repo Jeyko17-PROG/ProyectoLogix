@@ -1,15 +1,15 @@
 // API interna diminuta que Laravel usa para orquestar el bot (ver app/Services/MeetingBotClient.php).
-// No debe exponerse publicamente: solo Laravel deberia poder alcanzar este puerto (en Render,
-// via un servicio "Private"/red interna; en un VPS propio, dejando el puerto solo accesible
-// desde localhost/red privada con el firewall). La autenticacion real de todos modos es el
-// secreto compartido de abajo, no la ubicacion de red: escucha en 0.0.0.0 porque cuando este
-// worker corre en su propio contenedor (Render, Docker) 127.0.0.1 solo se referiria a si mismo
-// y Laravel, en OTRO contenedor, nunca podria alcanzarlo.
+// Este worker corre en la MISMA maquina que Laravel (Laragon local expuesto por tunel), asi
+// que escucha solo en 127.0.0.1: ni siquiera queda alcanzable desde la red local, mucho menos
+// desde el tunel publico. Si en el futuro Laravel y este worker llegan a correr en maquinas o
+// contenedores separados (ej. un despliegue en Render/Docker), hay que volver a 0.0.0.0 y
+// asegurar la red por otro lado (ver PORT/HOST abajo).
 
 const express = require('express');
 const bot = require('./bot');
 
 const PORT = process.env.PORT || 4100;
+const HOST = process.env.HOST || '127.0.0.1';
 const SECRET = process.env.SPIKIA_MEETBOT_SECRET || '';
 
 const app = express();
@@ -56,6 +56,6 @@ app.get('/status/:slug', (req, res) => {
     res.json({ status: bot.statusOf(req.params.slug) });
 });
 
-app.listen(PORT, '0.0.0.0', () => {
-    console.log(`spikia-meet-bot escuchando en 0.0.0.0:${PORT}`);
+app.listen(PORT, HOST, () => {
+    console.log(`spikia-meet-bot escuchando en ${HOST}:${PORT}`);
 });
