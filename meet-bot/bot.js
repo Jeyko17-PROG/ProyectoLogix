@@ -7,9 +7,42 @@
 // findVisibleByText()/NAME_INPUT_SELECTORS/JOIN_BUTTON_TEXTS/IN_CALL_SELECTORS de abajo,
 // probando manualmente en un Meet real que texto/aria-label tienen esos elementos hoy.
 
+const fs = require('fs');
 const axios = require('axios');
 const FormData = require('form-data');
 const { launch, getStream } = require('puppeteer-stream');
+
+// puppeteer-stream usa puppeteer-core por debajo, que a diferencia del paquete "puppeteer"
+// completo NO trae un Chromium propio ni lo detecta solo via variables de entorno: hay que
+// pasarle executablePath explicitamente en launch() o falla con "An `executablePath` or
+// `channel` must be specified for `puppeteer-core`". Se resuelve una vez al arrancar,
+// probando PUPPETEER_EXECUTABLE_PATH y despues las rutas tipicas de Windows/Linux.
+function resolveChromePath() {
+    const candidates = [
+        process.env.PUPPETEER_EXECUTABLE_PATH,
+        'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+        'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+        '/usr/bin/google-chrome-stable',
+        '/usr/bin/google-chrome',
+    ].filter(Boolean);
+
+    const found = candidates.find((candidate) => {
+        try {
+            return fs.existsSync(candidate);
+        } catch (error) {
+            return false;
+        }
+    });
+
+    if (!found) {
+        throw new Error(
+            'No se encontro Chrome instalado. Instala Google Chrome o define PUPPETEER_EXECUTABLE_PATH.'
+        );
+    }
+    return found;
+}
+
+const CHROME_PATH = resolveChromePath();
 
 const SEGMENT_MS = 5000; // mismo criterio que master.js (SEGMENT_MS) del lado de Laravel.
 const JOIN_TIMEOUT_MS = 5 * 60 * 1000; // el anfitrion admite manualmente, puede tardar.
@@ -157,6 +190,7 @@ async function join({ slug, meetUrl, ingestUrl, ingestToken }) {
         try {
             const browser = await launch({
                 headless: 'new',
+                executablePath: CHROME_PATH,
                 args: [
                     '--use-fake-ui-for-media-stream', // nunca deja que Chrome pida permiso de camara/mic
                     '--no-sandbox',
