@@ -48,6 +48,14 @@ const CHROME_PATH = resolveChromePath();
 const SEGMENT_MS = 5000; // mismo criterio que master.js (SEGMENT_MS) del lado de Laravel.
 const JOIN_TIMEOUT_MS = 5 * 60 * 1000; // el anfitrion admite manualmente, puede tardar.
 const BOT_DISPLAY_NAME = 'Spikia (traduciendo en vivo)';
+// Chrome controlado por Puppeteer se delata solo con navigator.webdriver=true y con
+// "HeadlessChrome" literal en el user-agent - confirmado que eso es lo que hace que Meet
+// muestre "No puedes unirte a esta videollamada" incluso con la reunion activa. Se probo
+// puppeteer-extra-plugin-stealth (la solucion "estandar") pero sus evasiones interfieren con
+// la extension propia de puppeteer-stream (rompe la captura de audio con
+// ERR_BLOCKED_BY_CLIENT); en vez de eso se parchean a mano, en la propia pagina, solo estos
+// dos fingerprints puntuales.
+const FAKE_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
 
 // Textos/aria-labels en varios idiomas: Meet elige el idioma segun la cuenta/region, y como
 // el bot entra sin sesion de Google no hay forma de forzarlo de antemano.
@@ -263,6 +271,10 @@ async function join({ slug, meetUrl, ingestUrl, ingestToken }) {
 
             const page = await browser.newPage();
             session.page = page;
+            await page.evaluateOnNewDocument(() => {
+                Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+            });
+            await page.setUserAgent(FAKE_USER_AGENT);
             await page.setViewport({ width: 1280, height: 720 });
 
             log(slug, 'Abriendo', meetUrl);
