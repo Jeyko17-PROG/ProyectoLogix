@@ -1355,7 +1355,11 @@ class SesionController extends Controller
                 $sesiones->each(function (Sesion $sesion) {
             $end = $sesion->scheduledEndAt();
             if (! $sesion->demo_expires_at && $end && now()->greaterThanOrEqualTo($end) && ! $sesion->extension_deadline_at) {
-                $sesion->extension_deadline_at = now()->addSeconds(20);
+                // 10 minutos de margen real para que el dueño note el aviso y decida extender
+                // antes del borrado automatico. Antes eran 20 SEGUNDOS: cleanupExpiredSessions()
+                // corre en cada carga de /sesiones, asi que con esa ventana casi nadie llegaba
+                // a tiempo y la sesion desaparecia sin que el usuario entendiera por que.
+                $sesion->extension_deadline_at = now()->addMinutes(10);
                 $sesion->save();
                 return;
             }

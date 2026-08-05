@@ -219,7 +219,7 @@
                                                     Sesion vencida
                                                 </p>
                                                 <p class="mt-1 text-[11px] font-bold text-red-100">
-                                                    Tiempo para extender: <span data-extension-countdown="{{ $extensionDeadline?->toIso8601String() }}">20s</span>
+                                                    Tiempo para extender: <span data-extension-countdown="{{ $extensionDeadline?->toIso8601String() }}">10:00</span>
                                                 </p>
                                                 <div class="mt-3 flex gap-2">
                                                     @foreach([1, 2, 3] as $hours)
@@ -476,9 +476,11 @@
             }
 
             const tick = () => {
-                const remaining = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
-                label.textContent = `${remaining}s`;
-                if (remaining <= 0) {
+                const remainingSeconds = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
+                const m = Math.floor(remainingSeconds / 60);
+                const s = remainingSeconds % 60;
+                label.textContent = `${m}:${String(s).padStart(2, '0')}`;
+                if (remainingSeconds <= 0) {
                     window.location.reload();
                 }
             };
