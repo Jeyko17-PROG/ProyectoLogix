@@ -53,7 +53,7 @@ app.post('/leave', async (req, res) => {
 });
 
 app.get('/status/:slug', (req, res) => {
-    res.json({ status: bot.statusOf(req.params.slug) });
+    res.json(bot.statusOf(req.params.slug));
 });
 
 app.listen(PORT, HOST, () => {

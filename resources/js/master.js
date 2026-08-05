@@ -873,6 +873,7 @@ if (config) {
         // MediaRecorder, solo prende/apaga un proceso en el worker de /meet-bot y hace
         // polling del estado para mostrar un badge. ---
         let meetingBotPollTimer = null;
+        let lastMeetingBotError = null;
 
         function setMeetingBotBadge(status) {
             if (!elements.meetingBotBadge) return;
@@ -895,6 +896,12 @@ if (config) {
                 if (!response.ok) return;
                 const payload = await response.json();
                 setMeetingBotBadge(payload?.status);
+                if (payload?.status === 'error' && payload?.error && payload.error !== lastMeetingBotError) {
+                    lastMeetingBotError = payload.error;
+                    updateUIBox('Bot de reunión: ' + payload.error, 'Sistema');
+                } else if (payload?.status !== 'error') {
+                    lastMeetingBotError = null;
+                }
                 if (payload?.status === 'joining' || payload?.status === 'active') {
                     if (!meetingBotPollTimer) meetingBotPollTimer = setInterval(pollMeetingBotStatus, 5000);
                 } else if (meetingBotPollTimer) {

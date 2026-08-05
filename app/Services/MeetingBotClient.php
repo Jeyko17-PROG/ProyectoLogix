@@ -58,6 +58,19 @@ class MeetingBotClient
         }
     }
 
+    /**
+     * Estado en vivo segun el worker (no la base de datos): es la unica fuente que sabe si
+     * una union realmente fallo (Meet no dejo entrar, no se encontro el boton, etc.), algo que
+     * Laravel nunca se entera por su cuenta porque no hay ningun callback del worker hacia
+     * Laravel salvo la subida de audio.
+     */
+    public function status(Sesion $sesion): array
+    {
+        $response = $this->http->get('status/' . $sesion->slug);
+
+        return json_decode((string) $response->getBody(), true) ?? ['status' => 'idle'];
+    }
+
     public function leave(Sesion $sesion): array
     {
         try {

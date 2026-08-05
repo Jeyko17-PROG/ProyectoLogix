@@ -8,6 +8,7 @@
 // probando manualmente en un Meet real que texto/aria-label tienen esos elementos hoy.
 
 const fs = require('fs');
+const path = require('path');
 const axios = require('axios');
 const FormData = require('form-data');
 const { launch, getStream } = require('puppeteer-stream');
@@ -60,12 +61,46 @@ const IN_CALL_TEXTS = [
 ];
 const MUTE_MIC_TEXTS = ['desactivar micr', 'turn off microphone', 'mute'];
 const MUTE_CAM_TEXTS = ['desactivar cámara', 'turn off camera'];
+// Meet muestra esto cuando el enlace no corresponde a una reunion activa en este momento
+// (nadie la tiene abierta, o es invalida/vencida) - no es un problema de selectores.
+const NOT_JOINABLE_TEXTS = ['no puedes unirte a esta videollamada', "you can't join this video call"];
 
 /** slug -> { page, browser, status, stopRequested } */
 const sessions = new Map();
 
 function log(slug, ...args) {
     console.log(`[meet-bot:${slug}]`, ...args);
+}
+
+// Temporal, para diagnosticar por que Meet no deja pasar al bot: guarda una captura de
+// pantalla + la lista de botones visibles de la pagina en meet-bot/debug/. Se puede quitar
+// una vez que el flujo de union quede estable.
+async function debugSnapshot(page, slug, label) {
+    try {
+        const dir = path.join(__dirname, 'debug');
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir);
+        const stamp = Date.now();
+        const base = path.join(dir, `${slug}-${label}-${stamp}`);
+
+        await page.screenshot({ path: `${base}.png` });
+
+        const buttons = await page.evaluate(() => {
+            const nodes = Array.from(document.querySelectorAll('button, [role="button"], input'));
+            return nodes
+                .filter((el) => el.offsetParent !== null)
+                .map((el) => ({
+                    tag: el.tagName,
+                    aria: el.getAttribute('aria-label'),
+                    text: (el.textContent || '').trim().slice(0, 60),
+                    type: el.getAttribute('type'),
+                }))
+                .slice(0, 60);
+        });
+        fs.writeFileSync(`${base}.json`, JSON.stringify(buttons, null, 2));
+        console.log(`[meet-bot:${slug}] Debug guardado: ${base}.png / .json`);
+    } catch (error) {
+        console.log(`[meet-bot:${slug}] No se pudo guardar el debug:`, error.message);
+    }
 }
 
 /**
@@ -92,17 +127,45 @@ async function findVisibleByText(page, candidates) {
     return element;
 }
 
+/**
+ * Reintenta findVisibleByText() cada intervalMs hasta timeoutMs. Meet tarda un rato en
+ * terminar de renderizar la pantalla previa a unirse ("Preparando la llamada...") despues de
+ * que page.goto() ya resolvio (networkidle2 no espera a ese render, que es JS del lado del
+ * cliente) - sin este retry, buscar el input de nombre o el boton de unirse un instante
+ * demasiado pronto siempre da "no encontrado" aunque la pagina este perfectamente bien.
+ */
+async function waitForVisibleByText(page, candidates, timeoutMs = 30000, intervalMs = 1000) {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+        const found = await findVisibleByText(page, candidates);
+        if (found) return found;
+        await new Promise((resolve) => setTimeout(resolve, intervalMs));
+    }
+    return null;
+}
+
+async function waitForNameInput(page, timeoutMs = 30000, intervalMs = 1000) {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+        const handle = await page.evaluateHandle(() => {
+            const inputs = Array.from(document.querySelectorAll('input[type="text"]'));
+            return inputs.find((el) => el.offsetParent !== null) || null;
+        });
+        const element = handle.asElement();
+        if (element) return element;
+        await handle.dispose();
+        await new Promise((resolve) => setTimeout(resolve, intervalMs));
+    }
+    return null;
+}
+
 async function fillDisplayName(page) {
     // El input de nombre en la pantalla previa a unirse no tiene un selector estable propio;
     // se identifica por ser el primer <input type="text"> visible de la pagina.
-    const nameInput = await page.evaluateHandle(() => {
-        const inputs = Array.from(document.querySelectorAll('input[type="text"]'));
-        return inputs.find((el) => el.offsetParent !== null) || null;
-    });
-    const element = nameInput.asElement();
+    const element = await waitForNameInput(page);
     if (!element) {
-        await nameInput.dispose();
-        return;
+        return; // Puede ser normal: si el bot ya tiene sesion/permiso previo, Meet a veces se
+                 // salta la pantalla de nombre y va directo al boton de unirse.
     }
     await element.click({ clickCount: 3 });
     await element.type(BOT_DISPLAY_NAME, { delay: 20 });
@@ -204,12 +267,23 @@ async function join({ slug, meetUrl, ingestUrl, ingestToken }) {
 
             log(slug, 'Abriendo', meetUrl);
             await page.goto(meetUrl, { waitUntil: 'networkidle2', timeout: 60000 });
+            await debugSnapshot(page, slug, 'recien-cargada');
 
             await fillDisplayName(page);
             await bestEffortMute(page);
 
-            const joinBtn = await findVisibleByText(page, JOIN_BUTTON_TEXTS);
+            const joinBtn = await waitForVisibleByText(page, JOIN_BUTTON_TEXTS, 30000);
             if (!joinBtn) {
+                await debugSnapshot(page, slug, 'sin-boton-join');
+
+                const notJoinable = await page.evaluate((texts) => {
+                    const body = document.body.innerText.toLowerCase();
+                    return texts.some((t) => body.includes(t));
+                }, NOT_JOINABLE_TEXTS).catch(() => false);
+
+                if (notJoinable) {
+                    throw new Error('La reunion no esta activa ahora mismo (nadie la tiene abierta) o el enlace no es valido.');
+                }
                 throw new Error('No se encontro el boton para pedir unirse a la reunion.');
             }
             await joinBtn.click();
@@ -224,8 +298,17 @@ async function join({ slug, meetUrl, ingestUrl, ingestToken }) {
             await captureLoop(session);
         } catch (error) {
             log(slug, 'Error uniendose a la reunion:', error.message);
+            // OJO: a proposito NO se llama a leave() aca - leave() borra la sesion del mapa,
+            // y eso perderia el status 'error' al instante (el endpoint de status volveria a
+            // reportar 'idle', escondiendo el fallo). Solo se cierra el navegador; la entrada
+            // se mantiene hasta que Laravel pida explicitamente /leave o se intente un nuevo /join.
             session.status = 'error';
-            await leave({ slug }).catch(() => {});
+            session.lastError = error.message;
+            try {
+                if (session.browser) await session.browser.close();
+            } catch (closeError) {
+                log(slug, 'Aviso cerrando el navegador tras error:', closeError.message);
+            }
         }
     })();
 
@@ -253,7 +336,8 @@ async function leave({ slug }) {
 
 function statusOf(slug) {
     const session = sessions.get(slug);
-    return session ? session.status : 'idle';
+    if (!session) return { status: 'idle' };
+    return { status: session.status, error: session.lastError || null };
 }
 
 module.exports = { join, leave, statusOf };

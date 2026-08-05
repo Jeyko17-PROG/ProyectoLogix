@@ -693,6 +693,30 @@ class SesionController extends Controller
             ->where('user_id', auth()->id())
             ->firstOrFail();
 
+        // El worker es la unica fuente real de "fallo al unirse" (Meet no dejo entrar, no
+        // encontro el boton, etc.) - la base de datos no se entera de eso por su cuenta. Se
+        // consulta en vivo y, si difiere, se refleja en la sesion para que quede consistente
+        // la proxima vez que se lea desde otro lado (p. ej. el listado de sesiones).
+        if (in_array($sesion->meeting_bot_status, ['joining', 'active'], true)) {
+            try {
+                $live = $this->meetingBot->status($sesion);
+                $liveStatus = $live['status'] ?? null;
+
+                if ($liveStatus && $liveStatus !== $sesion->meeting_bot_status) {
+                    $sesion->meeting_bot_status = $liveStatus;
+                    $sesion->save();
+                }
+
+                return response()->json([
+                    'status' => $sesion->meeting_bot_stale ? 'error' : $liveStatus,
+                    'error' => $live['error'] ?? null,
+                    'last_heartbeat_at' => $sesion->meeting_bot_last_heartbeat_at?->toIso8601String(),
+                ]);
+            } catch (\Throwable $e) {
+                // Worker inalcanzable: no tumbar el endpoint, mostrar lo ultimo que sabe la BD.
+            }
+        }
+
         return response()->json([
             'status' => $sesion->meeting_bot_stale ? 'error' : ($sesion->meeting_bot_status ?? 'idle'),
             'last_heartbeat_at' => $sesion->meeting_bot_last_heartbeat_at?->toIso8601String(),
