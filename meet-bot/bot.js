@@ -7,17 +7,14 @@
 // findVisibleByText()/NAME_INPUT_SELECTORS/JOIN_BUTTON_TEXTS/IN_CALL_SELECTORS de abajo,
 // probando manualmente en un Meet real que texto/aria-label tienen esos elementos hoy.
 
+// meet-bot/bot.js - Integración optimizada para Google Meet y Zoom Web Client
+
 const fs = require('fs');
 const path = require('path');
 const axios = require('axios');
 const FormData = require('form-data');
 const { launch, getStream } = require('puppeteer-stream');
 
-// puppeteer-stream usa puppeteer-core por debajo, que a diferencia del paquete "puppeteer"
-// completo NO trae un Chromium propio ni lo detecta solo via variables de entorno: hay que
-// pasarle executablePath explicitamente en launch() o falla con "An `executablePath` or
-// `channel` must be specified for `puppeteer-core`". Se resuelve una vez al arrancar,
-// probando PUPPETEER_EXECUTABLE_PATH y despues las rutas tipicas de Windows/Linux.
 function resolveChromePath() {
     const candidates = [
         process.env.PUPPETEER_EXECUTABLE_PATH,
@@ -37,7 +34,7 @@ function resolveChromePath() {
 
     if (!found) {
         throw new Error(
-            'No se encontro Chrome instalado. Instala Google Chrome o define PUPPETEER_EXECUTABLE_PATH.'
+            'No se encontró Chrome instalado. Instala Google Chrome o define PUPPETEER_EXECUTABLE_PATH.'
         );
     }
     return found;
@@ -45,44 +42,30 @@ function resolveChromePath() {
 
 const CHROME_PATH = resolveChromePath();
 
-const SEGMENT_MS = 5000; // mismo criterio que master.js (SEGMENT_MS) del lado de Laravel.
-const JOIN_TIMEOUT_MS = 5 * 60 * 1000; // el anfitrion admite manualmente, puede tardar.
+// Ajustado a 1500ms para acelerar la transcripción y traducción en tiempo real
+const SEGMENT_MS = 1500; 
+const JOIN_TIMEOUT_MS = 5 * 60 * 1000;
 const BOT_DISPLAY_NAME = 'Spikia (traduciendo en vivo)';
-// Chrome controlado por Puppeteer se delata solo con navigator.webdriver=true y con
-// "HeadlessChrome" literal en el user-agent - confirmado que eso es lo que hace que Meet
-// muestre "No puedes unirte a esta videollamada" incluso con la reunion activa. Se probo
-// puppeteer-extra-plugin-stealth (la solucion "estandar") pero sus evasiones interfieren con
-// la extension propia de puppeteer-stream (rompe la captura de audio con
-// ERR_BLOCKED_BY_CLIENT); en vez de eso se parchean a mano, en la propia pagina, solo estos
-// dos fingerprints puntuales.
 const FAKE_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
 
-// Textos/aria-labels en varios idiomas: Meet elige el idioma segun la cuenta/region, y como
-// el bot entra sin sesion de Google no hay forma de forzarlo de antemano.
 const JOIN_BUTTON_TEXTS = [
-    'pedir unirse', 'solicitar unirse', 'unirse ahora',
-    'ask to join', 'join now',
+    'pedir unirse', 'solicitar unirse', 'unirse ahora', 'unirse a la reunión', 'join',
+    'ask to join', 'join now', 'join meeting'
 ];
 const IN_CALL_TEXTS = [
-    'salir de la llamada', 'abandonar llamada',
-    'leave call', 'leave meeting',
+    'salir de la llamada', 'abandonar llamada', 'finalizar reunión',
+    'leave call', 'leave meeting', 'end meeting'
 ];
-const MUTE_MIC_TEXTS = ['desactivar micr', 'turn off microphone', 'mute'];
-const MUTE_CAM_TEXTS = ['desactivar cámara', 'turn off camera'];
-// Meet muestra esto cuando el enlace no corresponde a una reunion activa en este momento
-// (nadie la tiene abierta, o es invalida/vencida) - no es un problema de selectores.
+const MUTE_MIC_TEXTS = ['desactivar micr', 'turn off microphone', 'mute', 'silenciar'];
+const MUTE_CAM_TEXTS = ['desactivar cámara', 'turn off camera', 'stop video'];
 const NOT_JOINABLE_TEXTS = ['no puedes unirte a esta videollamada', "you can't join this video call"];
 
-/** slug -> { page, browser, status, stopRequested } */
 const sessions = new Map();
 
 function log(slug, ...args) {
     console.log(`[meet-bot:${slug}]`, ...args);
 }
 
-// Temporal, para diagnosticar por que Meet no deja pasar al bot: guarda una captura de
-// pantalla + la lista de botones visibles de la pagina en meet-bot/debug/. Se puede quitar
-// una vez que el flujo de union quede estable.
 async function debugSnapshot(page, slug, label) {
     try {
         const dir = path.join(__dirname, 'debug');
@@ -105,23 +88,18 @@ async function debugSnapshot(page, slug, label) {
                 .slice(0, 60);
         });
         fs.writeFileSync(`${base}.json`, JSON.stringify(buttons, null, 2));
-        console.log(`[meet-bot:${slug}] Debug guardado: ${base}.png / .json`);
+        log(slug, `Debug guardado: ${base}.png / .json`);
     } catch (error) {
-        console.log(`[meet-bot:${slug}] No se pudo guardar el debug:`, error.message);
+        log(slug, 'No se pudo guardar el debug:', error.message);
     }
 }
 
-/**
- * Busca, entre botones/elementos con role=button, el primero visible cuyo texto o
- * aria-label contenga alguno de los strings dados (case-insensitive). Devuelve un
- * ElementHandle o null.
- */
 async function findVisibleByText(page, candidates) {
     const handle = await page.evaluateHandle((candidates) => {
-        const nodes = Array.from(document.querySelectorAll('button, [role="button"]'));
+        const nodes = Array.from(document.querySelectorAll('button, [role="button"], a, input[type="button"]'));
         const norm = (s) => (s || '').toLowerCase();
         return nodes.find((el) => {
-            const label = norm(el.getAttribute('aria-label')) + ' ' + norm(el.textContent);
+            const label = norm(el.getAttribute('aria-label')) + ' ' + norm(el.textContent) + ' ' + norm(el.value);
             const visible = el.offsetParent !== null;
             return visible && candidates.some((c) => label.includes(c));
         }) || null;
@@ -135,13 +113,6 @@ async function findVisibleByText(page, candidates) {
     return element;
 }
 
-/**
- * Reintenta findVisibleByText() cada intervalMs hasta timeoutMs. Meet tarda un rato en
- * terminar de renderizar la pantalla previa a unirse ("Preparando la llamada...") despues de
- * que page.goto() ya resolvio (networkidle2 no espera a ese render, que es JS del lado del
- * cliente) - sin este retry, buscar el input de nombre o el boton de unirse un instante
- * demasiado pronto siempre da "no encontrado" aunque la pagina este perfectamente bien.
- */
 async function waitForVisibleByText(page, candidates, timeoutMs = 30000, intervalMs = 1000) {
     const deadline = Date.now() + timeoutMs;
     while (Date.now() < deadline) {
@@ -156,7 +127,7 @@ async function waitForNameInput(page, timeoutMs = 30000, intervalMs = 1000) {
     const deadline = Date.now() + timeoutMs;
     while (Date.now() < deadline) {
         const handle = await page.evaluateHandle(() => {
-            const inputs = Array.from(document.querySelectorAll('input[type="text"]'));
+            const inputs = Array.from(document.querySelectorAll('input[type="text"], input#inputname, input[name="name"]'));
             return inputs.find((el) => el.offsetParent !== null) || null;
         });
         const element = handle.asElement();
@@ -168,13 +139,8 @@ async function waitForNameInput(page, timeoutMs = 30000, intervalMs = 1000) {
 }
 
 async function fillDisplayName(page) {
-    // El input de nombre en la pantalla previa a unirse no tiene un selector estable propio;
-    // se identifica por ser el primer <input type="text"> visible de la pagina.
-    const element = await waitForNameInput(page);
-    if (!element) {
-        return; // Puede ser normal: si el bot ya tiene sesion/permiso previo, Meet a veces se
-                 // salta la pantalla de nombre y va directo al boton de unirse.
-    }
+    const element = await waitForNameInput(page, 15000);
+    if (!element) return;
     await element.click({ clickCount: 3 });
     await element.type(BOT_DISPLAY_NAME, { delay: 20 });
 }
@@ -183,12 +149,10 @@ async function waitForAdmission(page, slug) {
     const deadline = Date.now() + JOIN_TIMEOUT_MS;
     while (Date.now() < deadline) {
         const inCall = await findVisibleByText(page, IN_CALL_TEXTS);
-        if (inCall) {
-            return true;
-        }
+        if (inCall) return true;
         await new Promise((resolve) => setTimeout(resolve, 2000));
     }
-    log(slug, 'Timeout esperando admision del anfitrion.');
+    log(slug, 'Timeout esperando admisión del anfitrión.');
     return false;
 }
 
@@ -198,8 +162,7 @@ async function bestEffortMute(page) {
             const btn = await findVisibleByText(page, texts);
             if (btn) await btn.click();
         } catch (error) {
-            // No es critico: sin dispositivos reales de camara/microfono en este navegador,
-            // Meet ya deberia entrar sin enviar audio/video de todos modos.
+            // Silencioso
         }
     }
 }
@@ -216,10 +179,10 @@ async function uploadChunk(session, buffer) {
                 'X-Spikia-Bot-Token': session.ingestToken,
             },
             maxBodyLength: 25 * 1024 * 1024,
-            timeout: 15000,
+            timeout: 10000,
         });
     } catch (error) {
-        log(session.slug, 'Fallo al subir un segmento de audio a Laravel:', error.message);
+        log(session.slug, 'Fallo al subir segmento de audio a Laravel:', error.message);
     }
 }
 
@@ -248,6 +211,14 @@ async function captureLoop(session) {
     }
 }
 
+// Adapta enlaces de Zoom para forzar el cliente web sin requerir la App
+function prepareMeetingUrl(targetUrl) {
+    if (targetUrl.includes('zoom.us/j/')) {
+        return targetUrl.replace('/j/', '/wc/join/');
+    }
+    return targetUrl;
+}
+
 async function join({ slug, meetUrl, ingestUrl, ingestToken }) {
     const existing = sessions.get(slug);
     if (existing && ['joining', 'active'].includes(existing.status)) {
@@ -259,26 +230,36 @@ async function join({ slug, meetUrl, ingestUrl, ingestToken }) {
 
     (async () => {
         try {
+            const finalUrl = prepareMeetingUrl(meetUrl);
+            // OJO: --incognito y --guest se probaron aca y rompian el lanzamiento del
+            // navegador (Chrome terminaba en un contexto distinto al que Puppeteer sigue via
+            // CDP, y fallaba luego con "Target.createTarget: Failed to open a new tab"). Son
+            // redundantes ademas: Puppeteer ya lanza con su propio --user-data-dir temporal y
+            // vacio en cada join(), sin cookies ni sesion de Google, que es el mismo efecto
+            // que se buscaba con esos flags.
             const browser = await launch({
                 headless: 'new',
                 executablePath: CHROME_PATH,
                 args: [
-                    '--use-fake-ui-for-media-stream', // nunca deja que Chrome pida permiso de camara/mic
+                    '--use-fake-ui-for-media-stream',
+                    '--autoplay-policy=no-user-gesture-required',
                     '--no-sandbox',
+                    '--disable-blink-features=AutomationControlled',
                 ],
             });
             session.browser = browser;
 
             const page = await browser.newPage();
             session.page = page;
+
             await page.evaluateOnNewDocument(() => {
                 Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
             });
             await page.setUserAgent(FAKE_USER_AGENT);
             await page.setViewport({ width: 1280, height: 720 });
 
-            log(slug, 'Abriendo', meetUrl);
-            await page.goto(meetUrl, { waitUntil: 'networkidle2', timeout: 60000 });
+            log(slug, 'Abriendo', finalUrl);
+            await page.goto(finalUrl, { waitUntil: 'networkidle2', timeout: 60000 });
             await debugSnapshot(page, slug, 'recien-cargada');
 
             await fillDisplayName(page);
@@ -294,26 +275,22 @@ async function join({ slug, meetUrl, ingestUrl, ingestToken }) {
                 }, NOT_JOINABLE_TEXTS).catch(() => false);
 
                 if (notJoinable) {
-                    throw new Error('La reunion no esta activa ahora mismo (nadie la tiene abierta) o el enlace no es valido.');
+                    throw new Error('La reunión no está activa o el enlace es inválido.');
                 }
-                throw new Error('No se encontro el boton para pedir unirse a la reunion.');
+                throw new Error('No se encontró el botón para unirse a la reunión.');
             }
             await joinBtn.click();
 
             const admitted = await waitForAdmission(page, slug);
             if (!admitted || session.stopRequested) {
-                throw new Error('El anfitrion no admitio al bot a tiempo.');
+                throw new Error('El anfitrión no admitió al bot a tiempo.');
             }
 
             session.status = 'active';
-            log(slug, 'Admitido, capturando audio.');
+            log(slug, 'Admitido con éxito. Iniciando captura de audio...');
             await captureLoop(session);
         } catch (error) {
-            log(slug, 'Error uniendose a la reunion:', error.message);
-            // OJO: a proposito NO se llama a leave() aca - leave() borra la sesion del mapa,
-            // y eso perderia el status 'error' al instante (el endpoint de status volveria a
-            // reportar 'idle', escondiendo el fallo). Solo se cierra el navegador; la entrada
-            // se mantiene hasta que Laravel pida explicitamente /leave o se intente un nuevo /join.
+            log(slug, 'Error uniéndose a la reunión:', error.message);
             session.status = 'error';
             session.lastError = error.message;
             try {

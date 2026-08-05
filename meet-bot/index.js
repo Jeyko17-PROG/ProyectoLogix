@@ -8,7 +8,7 @@
 const express = require('express');
 const bot = require('./bot');
 
-const PORT = process.env.PORT || 4100;
+const PORT = process.env.PORT || 4200;
 const HOST = process.env.HOST || '127.0.0.1';
 const SECRET = process.env.SPIKIA_MEETBOT_SECRET || '';
 
