@@ -719,9 +719,13 @@ if (config) {
             if (elements.micSelect) elements.micSelect.disabled = isTab;
             if (elements.micTest) elements.micTest.disabled = isTab;
             if (elements.micHint) {
-                elements.micHint.textContent = isTab
-                    ? 'Para traducir Zoom/Meet: ábrelo en otra pestaña → aquí pulsa Iniciar → en el selector del navegador elige esa pestaña y marca "Compartir audio". Solo en Chrome/Edge de escritorio.'
-                    : 'Elige tu micrófono y pulsa Probar: la barra debe moverse al hablar.';
+                if (isTab) {
+                    elements.micHint.textContent = config.hasMeetingLink
+                        ? 'Para traducir Zoom/Meet: ábrelo en otra pestaña → aquí pulsa Iniciar → en el selector del navegador elige esa pestaña y marca "Compartir audio". Solo en Chrome/Edge de escritorio.'
+                        : 'Comparte el audio de una pestaña o video: pulsa Iniciar y en el selector del navegador elige esa pestaña marcando "Compartir audio". Solo en Chrome/Edge de escritorio.';
+                } else {
+                    elements.micHint.textContent = 'Elige tu micrófono y pulsa Probar: la barra debe moverse al hablar.';
+                }
             }
         }
 

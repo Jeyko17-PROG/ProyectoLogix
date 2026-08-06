@@ -75,6 +75,7 @@
     }
     $masterConfig['liveStartedAt'] = $sesion->live_started_at?->toIso8601String();
     $masterConfig['liveAccumulatedSeconds'] = (int) $sesion->live_accumulated_seconds;
+    $masterConfig['hasMeetingLink'] = (bool) $sesion->zoom_link;
 @endphp
 
 @push('head-scripts')
@@ -207,7 +208,7 @@
             @endif
             <div class="grid grid-cols-2 gap-2">
                 <button id="master-source-mic" type="button" class="source-btn py-2 rounded-xl text-[9px] font-black border border-white/10 transition-all" data-source="microphone">MICRÓFONO</button>
-                <button id="master-source-tab" type="button" class="source-btn py-2 rounded-xl text-[9px] font-black border border-white/10 transition-all" data-source="tab">PESTAÑA / ZOOM / MEET</button>
+                <button id="master-source-tab" type="button" class="source-btn py-2 rounded-xl text-[9px] font-black border border-white/10 transition-all" data-source="tab">{{ $sesion->zoom_link ? 'PESTAÑA / ZOOM / MEET' : 'PESTAÑA / VIDEO' }}</button>
             </div>
             <select id="master-mic-select" class="w-full bg-zinc-950 border border-white/10 rounded-xl px-3 py-2 text-[10px] font-black uppercase tracking-widest text-white">
                 <option value="">Micrófono predeterminado</option>
