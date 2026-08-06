@@ -2,6 +2,29 @@
 @php use App\Support\SpikiaUrl; @endphp
 @extends('layouts.spikia')
 
+@push('styles')
+<style>
+    /* Barra de scroll horizontal delgada para valores largos (STT/Traduccion/TTS) que no
+       caben en las cajas angostas del panel "Salida de voz IA" — antes se cortaban con "...". */
+    .spikia-hscroll {
+        overflow-x: auto;
+        white-space: nowrap;
+        scrollbar-width: thin;
+        scrollbar-color: rgba(34, 211, 238, 0.4) transparent;
+    }
+    .spikia-hscroll::-webkit-scrollbar {
+        height: 4px;
+    }
+    .spikia-hscroll::-webkit-scrollbar-thumb {
+        background-color: rgba(34, 211, 238, 0.4);
+        border-radius: 9999px;
+    }
+    .spikia-hscroll::-webkit-scrollbar-track {
+        background: transparent;
+    }
+</style>
+@endpush
+
 @section('content')
 @php
     $masterLanguages = config('spikia.master_languages', []);
@@ -123,21 +146,21 @@
             </button>
             <div id="ia-panel-body" class="hidden px-4 pb-4 pt-1 space-y-3">
                 <div class="grid grid-cols-2 gap-2">
-                    <div class="rounded-xl border border-white/10 bg-black/30 px-3 py-2">
+                    <div class="rounded-xl border border-white/10 bg-black/30 px-3 py-2 min-w-0">
                         <p class="text-[8px] font-black uppercase tracking-[0.25em] text-zinc-500">Modo</p>
-                        <p class="mt-1 text-[9px] font-black uppercase tracking-[0.2em] text-white">{{ ($sessionTranslation['translation_mode'] ?? 'voice_to_voice') === 'voice_to_voice' ? 'Voz a voz' : 'Voz a texto' }}</p>
+                        <p class="mt-1 text-[9px] font-black uppercase tracking-[0.2em] text-white spikia-hscroll">{{ ($sessionTranslation['translation_mode'] ?? 'voice_to_voice') === 'voice_to_voice' ? 'Voz a voz' : 'Voz a texto' }}</p>
                     </div>
-                    <div class="rounded-xl border border-white/10 bg-black/30 px-3 py-2">
+                    <div class="rounded-xl border border-white/10 bg-black/30 px-3 py-2 min-w-0">
                         <p class="text-[8px] font-black uppercase tracking-[0.25em] text-zinc-500">STT</p>
-                        <p class="mt-1 text-[9px] font-black uppercase tracking-[0.18em] text-white truncate">{{ $sessionTranslation['speech_to_text_model'] ?? 'gpt-4o-mini-transcribe' }}</p>
+                        <p class="mt-1 text-[9px] font-black uppercase tracking-[0.18em] text-white spikia-hscroll">{{ $sessionTranslation['speech_to_text_model'] ?? 'gpt-4o-mini-transcribe' }}</p>
                     </div>
-                    <div class="rounded-xl border border-white/10 bg-black/30 px-3 py-2">
+                    <div class="rounded-xl border border-white/10 bg-black/30 px-3 py-2 min-w-0">
                         <p class="text-[8px] font-black uppercase tracking-[0.25em] text-zinc-500">Traduccion</p>
-                        <p class="mt-1 text-[9px] font-black uppercase tracking-[0.18em] text-white truncate">{{ $sessionTranslation['translation_model'] ?? 'gpt-5.4-mini' }}</p>
+                        <p class="mt-1 text-[9px] font-black uppercase tracking-[0.18em] text-white spikia-hscroll">{{ $sessionTranslation['translation_model'] ?? 'gpt-5.4-mini' }}</p>
                     </div>
-                    <div class="rounded-xl border border-white/10 bg-black/30 px-3 py-2">
+                    <div class="rounded-xl border border-white/10 bg-black/30 px-3 py-2 min-w-0">
                         <p class="text-[8px] font-black uppercase tracking-[0.25em] text-zinc-500">TTS</p>
-                        <p class="mt-1 text-[9px] font-black uppercase tracking-[0.18em] text-white truncate">{{ $sessionTranslation['text_to_speech_model'] ?? 'gpt-4o-mini-tts' }}</p>
+                        <p class="mt-1 text-[9px] font-black uppercase tracking-[0.18em] text-white spikia-hscroll">{{ $sessionTranslation['text_to_speech_model'] ?? 'gpt-4o-mini-tts' }}</p>
                     </div>
                 </div>
 
