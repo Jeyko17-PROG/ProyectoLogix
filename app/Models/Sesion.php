@@ -102,8 +102,13 @@ class Sesion extends Model
     // reciente asumimos que el proceso murio (crash, VPS caido, etc.) sin haber avisado.
     public function getMeetingBotStaleAttribute(): bool
     {
+        // Ojo: si meeting_bot_last_heartbeat_at todavia es null NO es lo mismo que "viejo".
+        // Justo despues de que el worker confirma 'active' puede pasar un instante hasta que
+        // llegue el primer chunk de audio (el heartbeat solo se actualiza en ingestBotAudio);
+        // tratar ese hueco como "stale" marcaba error en la UI aunque el bot recien empezaba.
         return $this->meeting_bot_status === 'active'
-            && (! $this->meeting_bot_last_heartbeat_at || now()->diffInSeconds($this->meeting_bot_last_heartbeat_at) > 90);
+            && $this->meeting_bot_last_heartbeat_at
+            && now()->diffInSeconds($this->meeting_bot_last_heartbeat_at) > 90;
     }
 
     public function getDemoRemainingMinutesAttribute(): ?int
