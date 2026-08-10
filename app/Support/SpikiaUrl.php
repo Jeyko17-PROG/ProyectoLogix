@@ -116,7 +116,30 @@ final class SpikiaUrl
         if ($host === '' || in_array($host, ['localhost', '127.0.0.1', '::1'], true)) {
             return null;
         }
+        // Hostnames de desarrollo local (ej. "spikia.test" via Laragon) resuelven en ESTA PC
+        // por /etc/hosts pero no existen en internet. Si no se excluyen aca, un dueno que abre
+        // su propio panel en http://spikia.test terminaria con QRs/enlaces publicos apuntando
+        // a una URL que nadie mas puede alcanzar - justo el bug que se detecto antes de una demo.
+        if (self::isLocalDevHost($host)) {
+            return null;
+        }
         return rtrim($request->getSchemeAndHttpHost(), '/');
+    }
+
+    private static function isLocalDevHost(string $host): bool
+    {
+        $appHost = strtolower((string) parse_url((string) config('app.url', ''), PHP_URL_HOST));
+        if ($appHost !== '' && $host === $appHost) {
+            return true;
+        }
+
+        foreach (['.test', '.local', '.localhost'] as $suffix) {
+            if (str_ends_with($host, $suffix)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static function detectDynamicPublicBaseUrl(string $url): ?string
