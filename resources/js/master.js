@@ -252,7 +252,7 @@ if (config) {
         let mediaRecorder = null;
         let segmentTimer = null;
         let recorderMime = '';
-        const SEGMENT_MS = 5000;            // duracion de cada segmento de audio enviado a OpenAI
+        const SEGMENT_MS = 4000;            // duracion de cada segmento de audio enviado a OpenAI
         const MAX_PENDING_AUDIO_CHUNKS = 4; // tope de backlog: descartamos lo viejo si OpenAI se atrasa
         let selectedMicDeviceId = localStorage.getItem('spikia_master_mic') || '';
         let micMeter = { ctx: null, analyser: null, source: null, raf: null, data: null };
@@ -1513,6 +1513,8 @@ if (config) {
             (payload.messages || []).forEach((message) => emitSocketMessage(message));
         }
 
+        let lastDropWarningAt = 0;
+
         async function flushPendingAudioChunks() {
             if (isProcessingChunk) {
                 return;
@@ -1521,6 +1523,15 @@ if (config) {
             isProcessingChunk = true;
 
             while (pendingAudioChunks.length) {
+                if (state.isLive && !state.externalAudioActive) {
+                    const backlog = pendingAudioChunks.length - 1; // sin contar el que se esta por procesar
+                    upsertInterimPreview(
+                        backlog > 0
+                            ? `Traduciendo con OpenAI... (${backlog} segmento${backlog === 1 ? '' : 's'} en espera)`
+                            : 'Traduciendo con OpenAI...',
+                        state.langName
+                    );
+                }
                 const blob = pendingAudioChunks.shift();
                 try {
                     await processAudioChunk(blob);
@@ -1546,9 +1557,24 @@ if (config) {
         function enqueueAudioChunk(blob) {
             pendingAudioChunks.push(blob);
             // Si OpenAI se atrasa, no dejamos crecer el backlog sin limite (evita
-            // congelamiento progresivo y memoria): conservamos solo los mas recientes.
+            // congelamiento progresivo y memoria): conservamos solo los mas recientes. Antes
+            // esto pasaba en silencio - el presentador no tenia forma de saber que se perdio
+            // audio. Ahora se avisa (con un throttle de 15s para no spamear el cuadro de
+            // texto si la racha de atraso dura un rato).
+            let dropped = 0;
             while (pendingAudioChunks.length > MAX_PENDING_AUDIO_CHUNKS) {
                 pendingAudioChunks.shift();
+                dropped++;
+            }
+            if (dropped > 0 && state.isLive) {
+                const now = Date.now();
+                if (now - lastDropWarningAt > 15000) {
+                    lastDropWarningAt = now;
+                    updateUIBox(
+                        'OpenAI no da abasto: se descartó audio sin traducir. Si sigue pasando, usa el modo Micrófono en vez de Pestaña/Video.',
+                        'Sistema'
+                    );
+                }
             }
             flushPendingAudioChunks();
         }
