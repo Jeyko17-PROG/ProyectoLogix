@@ -5,9 +5,13 @@
 @section('content')
 <div class="flex min-h-screen w-screen flex-col items-center gap-6 bg-black px-6 py-10 text-white">
     <div class="w-full max-w-2xl rounded-2xl border border-amber-400/30 bg-amber-400/10 px-5 py-3 text-center text-[11px] font-black uppercase tracking-[0.2em] text-amber-200">
-        Modo experimental: la captura y el recorte de fondo funcionan en tu navegador, pero
-        todavía no hay ningún proveedor de video en tiempo real conectado — los oyentes de
-        la sala no reciben esta señal todavía.
+        Modo experimental: la captura y el recorte de fondo funcionan en tu navegador.
+        @if(config('spikia.livekit.url') && config('spikia.livekit.api_key'))
+            Esta señal se transmite en vivo a los oyentes de la sala.
+        @else
+            Falta configurar LiveKit en el servidor (LIVEKIT_URL/API_KEY/API_SECRET) para que
+            los oyentes reciban esta señal.
+        @endif
     </div>
 
     <h1 class="text-xl font-light italic">
@@ -26,6 +30,7 @@
 @php
     $interpreteConfig = [
         'slug' => $sesion->slug,
+        'livekitTokenUrl' => route('sesiones.livekit-token.publisher', ['slug' => $sesion->slug], false),
     ];
 @endphp
 

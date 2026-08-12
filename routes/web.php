@@ -22,6 +22,11 @@ Route::get('/sesiones/{slug}/transmision', [SesionController::class, 'transmisio
 Route::get('/sesiones/{slug}/movil', [SesionController::class, 'movil'])->name('sesion.movil');
 Route::get('/sesiones/{slug}/avatar', [SesionController::class, 'avatar'])->name('sesion.avatar');
 Route::get('/sesiones/{slug}/mensajes', [SesionController::class, 'feed'])->name('sesiones.mensajes.feed');
+// Token de LiveKit para OYENTES (transmision/movil): publico, solo-suscripcion, sin
+// publicar nada. Necesario para que el oyente pueda recibir el video del interprete.
+Route::get('/sesiones/{slug}/livekit-token/viewer', [SesionController::class, 'liveKitViewerToken'])
+    ->middleware('throttle:60,1')
+    ->name('sesiones.livekit-token.viewer');
 // Ingesta de audio del worker del bot de reunion (Node, sin sesion de navegador ni CSRF):
 // la autorizacion es el header X-Spikia-Bot-Token, ver ingestBotAudio().
 Route::post('/sesiones/{slug}/bot-audio', [SesionController::class, 'ingestBotAudio'])
@@ -62,6 +67,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Modo 'human_live' del avatar: el dueño de la sesión transmite su propia cámara.
     // Scaffold sin proveedor WebRTC real conectado todavía (ver avatar-interprete-broadcaster.js).
     Route::get('/sesiones/{slug}/interprete', [SesionController::class, 'interprete'])->name('sesion.interprete');
+    Route::get('/sesiones/{slug}/livekit-token/publisher', [SesionController::class, 'liveKitPublisherToken'])->name('sesiones.livekit-token.publisher');
     
     // Transcripciones
     Route::get('/transcripciones-historial', [TranscripcionController::class, 'listado'])->name('transcripciones.listado');

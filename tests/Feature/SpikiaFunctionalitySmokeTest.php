@@ -143,6 +143,72 @@ class SpikiaFunctionalitySmokeTest extends TestCase
         $this->assertNull($sesion->bot_ingest_token);
     }
 
+    public function test_livekit_publisher_token_requires_human_live_mode_and_config(): void
+    {
+        config(['spikia.features.sign_avatar' => true]);
+        $user = User::factory()->create();
+        $sesion = Sesion::create([
+            'user_id' => $user->id,
+            'titulo' => 'Sesion LiveKit',
+            'slug' => 'sesion-livekit-test',
+            'idiomas' => ['es-ES'],
+            'has_sign_avatar' => true,
+            'avatar_mode' => 'human_live',
+        ]);
+
+        // Sin LIVEKIT_URL/API_KEY configurados: 503, no un 500 crudo.
+        config(['spikia.livekit' => ['url' => '', 'api_key' => '', 'api_secret' => '']]);
+        $this->actingAs($user)
+            ->get(route('sesiones.livekit-token.publisher', $sesion->slug))
+            ->assertStatus(503);
+
+        // Con LiveKit configurado, devuelve token + url.
+        config(['spikia.livekit' => ['url' => 'wss://fake.livekit.cloud', 'api_key' => 'APIkey', 'api_secret' => 'secret123']]);
+        $response = $this->actingAs($user)
+            ->get(route('sesiones.livekit-token.publisher', $sesion->slug));
+        $response->assertOk()->assertJsonStructure(['url', 'token']);
+        $this->assertSame('wss://fake.livekit.cloud', $response->json('url'));
+
+        $token = $response->json('token');
+        [$headerB64, $payloadB64, ] = explode('.', $token);
+        $payload = json_decode(base64_decode(strtr($payloadB64, '-_', '+/')), true);
+        $this->assertSame('sesion-livekit-test', $payload['video']['room']);
+        $this->assertTrue($payload['video']['canPublish']);
+
+        // Sin avatar_mode = human_live: 404.
+        $sesion->update(['avatar_mode' => '3d']);
+        $this->actingAs($user)
+            ->get(route('sesiones.livekit-token.publisher', $sesion->slug))
+            ->assertStatus(404);
+    }
+
+    public function test_livekit_viewer_token_is_public_and_subscribe_only(): void
+    {
+        config([
+            'spikia.features.sign_avatar' => true,
+            'spikia.livekit' => ['url' => 'wss://fake.livekit.cloud', 'api_key' => 'APIkey', 'api_secret' => 'secret123'],
+        ]);
+        $sesion = Sesion::create([
+            'user_id' => User::factory()->create()->id,
+            'titulo' => 'Sesion LiveKit Viewer',
+            'slug' => 'sesion-livekit-viewer-test',
+            'idiomas' => ['es-ES'],
+            'has_sign_avatar' => true,
+            'avatar_mode' => 'human_live',
+        ]);
+
+        // Publico: no requiere sesion autenticada.
+        $response = $this->get(route('sesiones.livekit-token.viewer', $sesion->slug));
+        $response->assertOk()->assertJsonStructure(['url', 'token']);
+
+        $token = $response->json('token');
+        [, $payloadB64, ] = explode('.', $token);
+        $payload = json_decode(base64_decode(strtr($payloadB64, '-_', '+/')), true);
+        $this->assertSame('sesion-livekit-viewer-test', $payload['video']['room']);
+        $this->assertFalse($payload['video']['canPublish']);
+        $this->assertTrue($payload['video']['canSubscribe']);
+    }
+
     public function test_meeting_bot_ingest_requires_valid_token(): void
     {
         config(['spikia.features.meeting_bot' => true]);

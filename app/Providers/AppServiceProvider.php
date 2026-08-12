@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Services\LiveKitTokenService;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
 
@@ -12,7 +13,12 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        $this->app->bind(LiveKitTokenService::class, function () {
+            return new LiveKitTokenService(
+                (string) config('spikia.livekit.api_key', ''),
+                (string) config('spikia.livekit.api_secret', ''),
+            );
+        });
     }
 
     /**

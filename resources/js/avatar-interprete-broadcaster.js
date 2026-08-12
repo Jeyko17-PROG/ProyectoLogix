@@ -1,18 +1,17 @@
 // Modo 'human_live' — lado del INTERPRETE real (pagina /sesiones/{slug}/interprete).
 //
-// Lo que SI es funcional hoy: captura la camara del interprete, corre la segmentacion de
-// persona/fondo en el navegador (MediaPipe Selfie Segmentation, corriendo 100% local, los
-// assets estan self-hosted en /vendor/mediapipe/ en vez de un CDN externo) y compone un
-// canvas de salida con el interprete recortado sobre fondo verde (efecto croma tipo Meet).
+// Captura la camara del interprete, corre la segmentacion de persona/fondo en el navegador
+// (MediaPipe Selfie Segmentation, 100% local, assets self-hosted en /vendor/mediapipe/ en vez
+// de un CDN externo), compone un canvas de salida con el interprete recortado sobre fondo
+// croma, y publica ese canvas (+ el audio del microfono) a una sala de LiveKit para que los
+// oyentes (avatar-interprete-viewer.js) lo reciban en /transmision.
 //
-// Lo que NO es funcional todavia: enviar ese video procesado a los oyentes de la sala. Eso
-// requiere un proveedor de WebRTC real (LiveKit, Agora, o similar) con cuenta/API keys, que
-// todavia no existen en este proyecto. `connectToViewers()` esta deliberadamente sin
-// implementar y marcado como tal: conectar un SDK ahi es el siguiente paso cuando se elija
-// un proveedor, tomando `outputCanvas` (o su stream via captureStream()) como fuente de video
-// a publicar.
+// Si LIVEKIT_URL/API_KEY/API_SECRET no estan configurados en el servidor, la vista sigue
+// siendo util como preview local (el interprete se ve a si mismo) pero nadie mas recibe la
+// señal - ver el mensaje de estado que setStatus() muestra en ese caso.
 
 import { SelfieSegmentation } from '@mediapipe/selfie_segmentation';
+import { Room, LocalVideoTrack, LocalAudioTrack } from 'livekit-client';
 
 const CHROMA_COLOR = { r: 0, g: 177, b: 64 }; // Verde croma estandar
 
@@ -28,6 +27,8 @@ function init() {
 
     const ctx = outputCanvas.getContext('2d');
     let running = false;
+    let micStream = null;
+    let room = null;
 
     function setStatus(text) {
         if (statusEl) {
@@ -71,6 +72,7 @@ function init() {
                 video: { width: 1280, height: 720, facingMode: 'user' },
                 audio: true,
             });
+            micStream = stream;
             sourceVideo.srcObject = stream;
             await sourceVideo.play();
         } catch (error) {
@@ -105,14 +107,54 @@ function init() {
         requestAnimationFrame(frameLoop);
     }
 
-    // --- PENDIENTE: conectar con un proveedor real de WebRTC ---
-    // outputCanvas.captureStream(30) da un MediaStream real y funcional del video ya
-    // procesado (croma incluido); lo que falta es publicarlo hacia LiveKit/Agora/etc. para
-    // que los oyentes de `config.slug` lo reciban. Sin esto, el interprete se ve a si mismo
-    // pero nadie mas recibe la señal todavia.
-    function connectToViewers() {
-        setStatus('Vista previa local activa. Envio en vivo a los oyentes: pendiente de conectar un proveedor WebRTC (LiveKit/Agora).');
+    // outputCanvas.captureStream(30) da un MediaStream real del video ya procesado (croma
+    // incluido); se publica ese track de video + el track de audio del microfono original a
+    // una sala de LiveKit nombrada como el slug de la sesion, para que avatar-interprete-viewer.js
+    // (que se conecta a la MISMA sala del lado del oyente) los reciba.
+    async function connectToViewers() {
+        if (!config.livekitTokenUrl) {
+            setStatus('Vista previa local activa. Falta configurar LiveKit en el servidor para transmitir en vivo.');
+            return;
+        }
+
+        let tokenData;
+        try {
+            const res = await fetch(config.livekitTokenUrl, { headers: { Accept: 'application/json' } });
+            const body = await res.json().catch(() => ({}));
+            if (!res.ok) {
+                setStatus('No se pudo obtener el token de video: ' + (body.message || res.status));
+                return;
+            }
+            tokenData = body;
+        } catch (error) {
+            setStatus('No se pudo contactar al servidor para el token de video: ' + error.message);
+            return;
+        }
+
+        try {
+            room = new Room();
+            await room.connect(tokenData.url, tokenData.token);
+
+            const canvasStream = outputCanvas.captureStream(30);
+            const videoTrack = new LocalVideoTrack(canvasStream.getVideoTracks()[0]);
+            await room.localParticipant.publishTrack(videoTrack, { name: 'interprete-video' });
+
+            const audioTrackNative = micStream?.getAudioTracks()[0];
+            if (audioTrackNative) {
+                const audioTrack = new LocalAudioTrack(audioTrackNative);
+                await room.localParticipant.publishTrack(audioTrack, { name: 'interprete-audio' });
+            }
+
+            setStatus('En vivo: los oyentes ya reciben esta señal.');
+        } catch (error) {
+            console.error('LiveKit publish error:', error);
+            setStatus('No se pudo conectar al servicio de video en vivo: ' + error.message);
+        }
     }
+
+    window.addEventListener('beforeunload', () => {
+        try { room?.disconnect(); } catch (e) {}
+    });
 
     (async () => {
         setStatus('Solicitando permiso de camara...');
@@ -122,7 +164,7 @@ function init() {
         }
         setStatus('Procesando video (segmentacion de fondo)...');
         startSegmentationLoop();
-        connectToViewers();
+        await connectToViewers();
     })();
 }
 

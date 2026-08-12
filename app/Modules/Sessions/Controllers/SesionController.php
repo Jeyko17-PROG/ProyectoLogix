@@ -330,6 +330,42 @@ class SesionController extends Controller
         return view('modules.sessions.interprete', compact('sesion'));
     }
 
+    /**
+     * Token de LiveKit para el interprete (dueño de la sesion): puede publicar su video a la
+     * sala. La sala es el slug de la sesion, asi coincide 1:1 con lo que usa el viewer.
+     */
+    public function liveKitPublisherToken(string $slug, \App\Services\LiveKitTokenService $liveKit)
+    {
+        $sesion = Sesion::where('slug', $slug)
+            ->where('user_id', auth()->id())
+            ->firstOrFail();
+
+        abort_unless(config('spikia.features.sign_avatar') && $sesion->avatar_mode === 'human_live', 404);
+        abort_unless($liveKit->enabled(), 503, 'LiveKit no esta configurado (LIVEKIT_URL/API_KEY/API_SECRET).');
+
+        return response()->json([
+            'url' => config('spikia.livekit.url'),
+            'token' => $liveKit->createToken('interprete-' . $sesion->slug, $sesion->slug, canPublish: true),
+        ]);
+    }
+
+    /**
+     * Token de LiveKit para un OYENTE (publico, sin autenticacion): solo puede suscribirse,
+     * nunca publicar. Identidad aleatoria por pestaña, no hace falta que sea estable.
+     */
+    public function liveKitViewerToken(string $slug, \App\Services\LiveKitTokenService $liveKit)
+    {
+        $sesion = Sesion::where('slug', $slug)->firstOrFail();
+
+        abort_unless(config('spikia.features.sign_avatar') && $sesion->avatar_mode === 'human_live', 404);
+        abort_unless($liveKit->enabled(), 503, 'LiveKit no esta configurado (LIVEKIT_URL/API_KEY/API_SECRET).');
+
+        return response()->json([
+            'url' => config('spikia.livekit.url'),
+            'token' => $liveKit->createToken('oyente-' . \Illuminate\Support\Str::random(10), $sesion->slug, canPublish: false),
+        ]);
+    }
+
     public function processAudio(Request $request, string $slug)
     {
         $sesion = Sesion::where('slug', $slug)

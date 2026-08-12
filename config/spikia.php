@@ -22,6 +22,14 @@ return [
         'url' => env('SPIKIA_MEETBOT_URL', 'http://127.0.0.1:4100'),
         'secret' => env('SPIKIA_MEETBOT_SECRET'),
     ],
+    // Video en tiempo real para el modo "Interprete en vivo" (avatar_mode = human_live):
+    // sin esto configurado, la vista previa del interprete sigue siendo solo local (no llega
+    // a transmision ni a los oyentes) - ver LiveKitTokenService.
+    'livekit' => [
+        'url' => env('LIVEKIT_URL', ''),
+        'api_key' => env('LIVEKIT_API_KEY', ''),
+        'api_secret' => env('LIVEKIT_API_SECRET', ''),
+    ],
     'elevenlabs' => [
         'enabled' => (bool) env('ELEVENLABS_ENABLED', false),
         'api_key' => env('ELEVENLABS_API_KEY'),

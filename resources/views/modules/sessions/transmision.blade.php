@@ -141,6 +141,9 @@
         'translationSettings' => $sessionTranslation,
         'avatarCharacter' => $sesion->avatar_character,
         'avatarVideoUrl' => $sesion->avatar_video_url,
+        'livekitTokenUrl' => $sesion->avatar_mode === 'human_live'
+            ? route('sesiones.livekit-token.viewer', ['slug' => $sesion->slug], false)
+            : null,
     ];
 @endphp
 
